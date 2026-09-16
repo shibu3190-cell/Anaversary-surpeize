@@ -1,87 +1,85 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>A Special Surprise</title>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anniversary Surprise</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <!-- SETUP SCREEN (Visible only to you) -->
-    <section id="setup-screen" class="screen active">
-        <div class="glass-card">
-            <h1>Link Creator</h1>
-            <p>Fill this out to create her surprise link.</p>
-            <input type="text" id="setup-title" placeholder="Occasion (e.g. Happy Birthday)">
-            <textarea id="setup-msg" placeholder="Your personal message..."></textarea>
-            <input type="text" id="setup-pass" placeholder="Set a Password">
-            <button class="primary-btn" onclick="generateLink()">Create & Copy Link</button>
-            
-            <div id="link-output" class="hidden">
-                <p class="success-text">✅ Link Created & Copied!</p>
-                <input type="text" id="share-url" readonly>
-                <p style="font-size: 12px; color: #666;">Paste this link in WhatsApp/iMessage to send to her.</p>
-            </div>
-        </div>
-    </section>
+  <!-- Screen 1: Creator Form (shows when no ?d= query param) -->
+  <div id="creatorScreen" class="screen">
+    <div class="card">
+      <h2>Create a Surprise</h2>
+      <form id="creatorForm">
+        <label for="titleInput">Occasion / Title</label>
+        <input type="text" id="titleInput" placeholder="Happy Anniversary!" required>
 
-    <!-- LANDING SCREEN (Visible to her) -->
-    <section id="landing-screen" class="screen hidden">
-        <div id="landing-bg" class="full-bg"></div>
-        <div class="overlay"></div>
-        <div class="content">
-            <h1 id="display-title"></h1>
-            <p id="display-msg"></p>
-            <button class="primary-btn" onclick="showPasswordGate()">Enter</button>
-        </div>
-    </section>
+        <label for="messageInput">Special Message</label>
+        <textarea id="messageInput" rows="4" placeholder="Write your heartfelt message here..." required></textarea>
 
-    <!-- PASSWORD GATE -->
-    <section id="password-screen" class="screen hidden">
-        <div class="glass-card">
-            <h2>Unlock</h2>
-            <p>Enter the secret code</p>
-            <input type="password" id="pass-input" placeholder="•••••••" inputmode="numeric">
-            <button class="primary-btn" onclick="checkPassword()">Unlock</button>
-            <p id="error-msg" class="error">Incorrect password.</p>
-        </div>
-    </section>
+        <label for="passwordInput">Secret Passcode</label>
+        <input type="password" id="passwordInput" placeholder="Enter secret code" required>
 
-    <!-- MAIN CONTENT -->
-    <section id="main-content" class="screen hidden">
-        <div class="scroll-container">
-            <div class="glass-card">
-                <h2 id="final-title"></h2>
-                <p id="final-msg"></p>
-            </div>
+        <button type="submit">Generate Link</button>
+      </form>
 
-            <div class="slider">
-                <div class="slider-wrapper" id="slider-wrapper">
-                    <div class="slide"><img src="assets/photo1.jpg" onerror="imgErr(this)"><div class="caption">Forever</div></div>
-                    <div class="slide"><img src="assets/photo2.jpg" onerror="imgErr(this)"><div class="caption">Always</div></div>
-                    <div class="slide"><img src="assets/photo3.jpg" onerror="imgErr(this)"><div class="caption">Together</div></div>
-                </div>
-                <button class="nav-btn prev" onclick="moveSlide(-1)">❮</button>
-                <button class="nav-btn next" onclick="moveSlide(1)">❯</button>
-            </div>
+      <div id="linkResult" class="hidden">
+        <label>Share this link:</label>
+        <input type="text" id="generatedUrl" readonly>
+        <button id="copyBtn" type="button">Copy Link</button>
+      </div>
+    </div>
+  </div>
 
-            <div class="game-box glass-card">
-                <h3>Catch the Heart</h3>
-                <p>Score: <span id="score">0</span>/10</p>
-                <div id="game-area"><div id="target">💝</div></div>
-            </div>
-        </div>
-    </section>
+  <!-- Screen 2: Password Gate -->
+  <div id="gateScreen" class="screen hidden">
+    <div class="card">
+      <h2>A Secret Surprise Awaits</h2>
+      <p>Enter the passcode to unlock:</p>
+      <input type="password" id="unlockPasscode" placeholder="Enter passcode">
+      <button id="unlockBtn" type="button">Unlock</button>
+      <p id="gateError" class="error hidden">Incorrect passcode, try again!</p>
+    </div>
+  </div>
 
-    <div id="win-overlay" class="win-overlay hidden">
-        <div class="glass-card">
-            <h2>You're Amazing! 🎉</h2>
-            <button class="primary-btn" onclick="location.reload()">View Again</button>
-        </div>
+  <!-- Screen 3: Main Celebration & Content -->
+  <div id="celebrationScreen" class="screen hidden">
+    <h1 id="celebrationTitle"></h1>
+
+    <!-- Image Slider -->
+    <div class="slider-container">
+      <div class="slider">
+        <img src="assets/photo1.jpg" alt="Memory 1" class="slide active">
+        <img src="assets/photo2.jpg" alt="Memory 2" class="slide">
+        <img src="assets/photo3.jpg" alt="Memory 3" class="slide">
+      </div>
     </div>
 
-    <script src="script.js"></script>
+    <div class="card message-card">
+      <p id="displayMessage"></p>
+    </div>
+
+    <!-- Mini Game Section -->
+    <div class="game-section">
+      <h3>Catch the Hearts!</h3>
+      <p>Score 10 to reveal the final message. Current Score: <span id="scoreDisplay">0</span></p>
+      <div id="gameArea">
+        <div id="target">❤️</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Win Overlay -->
+  <div id="winOverlay" class="overlay hidden">
+    <div class="card modal">
+      <h2>🎉 You Won! 🎉</h2>
+      <p>You caught all the hearts! Wishing you endless happiness, love, and memories together!</p>
+      <button id="closeOverlayBtn" type="button">Close</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
