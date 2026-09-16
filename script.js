@@ -1,7 +1,8 @@
 let CONFIG = {
   title: "",
   message: "",
-  password: ""
+  password: "",
+  photos: []
 };
 
 let score = 0;
@@ -9,14 +10,16 @@ const targetScore = 10;
 let sliderInterval = null;
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Read payload from hash or query string
+  const rawHash = window.location.hash ? window.location.hash.substring(1) : "";
   const urlParams = new URLSearchParams(window.location.search);
-  const dParam = urlParams.get("d");
+  const dataParam = rawHash || urlParams.get("d");
 
-  if (dParam) {
+  if (dataParam) {
     document.getElementById("creatorScreen").classList.add("hidden");
 
     try {
-      const jsonString = decodeURIComponent(escape(atob(decodeURIComponent(dParam))));
+      const jsonString = decodeURIComponent(escape(atob(decodeURIComponent(dataParam))));
       CONFIG = JSON.parse(jsonString);
 
       if (!CONFIG.title || !CONFIG.password) {
@@ -38,7 +41,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// Key Derivation Helper (PBKDF2)
+// Crypto Key Derivation (PBKDF2)
 async function deriveKey(password, salt, usage) {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
@@ -53,8 +56,41 @@ async function deriveKey(password, salt, usage) {
   );
 }
 
-// Encrypt File to Uint8Array [16B salt + 12B IV + ciphertext]
-async function encryptFile(buffer, password) {
+// Compress image on the fly to keep URL size compact
+function compressImage(file, maxWidth = 500, quality = 0.7) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert to compact WebP base64
+        const dataUrl = canvas.toDataURL("image/webp", quality);
+        resolve(dataUrl);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Encrypt string data to base64
+async function encryptPayload(text, password) {
+  const enc = new TextEncoder();
+  const data = enc.encode(text);
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await deriveKey(password, salt, "encrypt");
@@ -62,23 +98,29 @@ async function encryptFile(buffer, password) {
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: iv },
     key,
-    buffer
+    data
   );
 
   const combined = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
   combined.set(salt, 0);
   combined.set(iv, 16);
   combined.set(new Uint8Array(ciphertext), 28);
-  return combined;
+
+  let binary = "";
+  for (let i = 0; i < combined.byteLength; i++) {
+    binary += String.fromCharCode(combined[i]);
+  }
+  return btoa(binary);
 }
 
-// Decrypt Binary Asset from Server
-async function decryptFile(url, password) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Could not fetch ${url}`);
-  const arrayBuffer = await response.arrayBuffer();
+// Decrypt base64 string
+async function decryptPayload(base64Data, password) {
+  const binary = atob(base64Data);
+  const data = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    data[i] = binary.charCodeAt(i);
+  }
 
-  const data = new Uint8Array(arrayBuffer);
   const salt = data.slice(0, 16);
   const iv = data.slice(16, 28);
   const encryptedBytes = data.slice(28);
@@ -90,8 +132,8 @@ async function decryptFile(url, password) {
     encryptedBytes
   );
 
-  const blob = new Blob([decryptedBuffer], { type: "image/jpeg" });
-  return URL.createObjectURL(blob);
+  const dec = new TextDecoder();
+  return dec.decode(decryptedBuffer);
 }
 
 // Creator Form Flow
@@ -110,42 +152,31 @@ function setupCreator() {
     }
 
     generateBtn.disabled = true;
-    generateBtn.innerText = "Encrypting photos...";
+    generateBtn.innerText = "Compressing & Encrypting...";
 
-    const downloadContainer = document.getElementById("downloadLinks");
-    downloadContainer.innerHTML = "";
-
+    // 1. Compress and encrypt photos
+    const encryptedPhotos = [];
     for (let i = 0; i < 3; i++) {
-      const buffer = await files[i].arrayBuffer();
-      const encryptedData = await encryptFile(buffer, password);
-      
-      const blob = new Blob([encryptedData], { type: "application/octet-stream" });
-      const url = URL.createObjectURL(blob);
-      const filename = `photo${i + 1}.enc`;
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.className = "download-link";
-      a.innerText = `⬇️ Download ${filename}`;
-      downloadContainer.appendChild(a);
-
-      a.click();
+      const compressedDataUrl = await compressImage(files[i]);
+      const encryptedBlob = await encryptPayload(compressedDataUrl, password);
+      encryptedPhotos.push(encryptedBlob);
     }
 
+    // 2. Build URL with state payload
     const data = {
       title: document.getElementById("titleInput").value.trim(),
       message: document.getElementById("messageInput").value.trim(),
-      password: password
+      password: password,
+      photos: encryptedPhotos
     };
 
     const base64String = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-    const finalUrl = window.location.origin + window.location.pathname + "?d=" + encodeURIComponent(base64String);
+    const finalUrl = window.location.origin + window.location.pathname + "#" + encodeURIComponent(base64String);
 
     document.getElementById("generatedUrl").value = finalUrl;
     document.getElementById("linkResult").classList.remove("hidden");
     generateBtn.disabled = false;
-    generateBtn.innerText = "Encrypt Photos & Generate Link";
+    generateBtn.innerText = "Create Surprise Link";
   });
 
   document.getElementById("copyBtn").addEventListener("click", () => {
@@ -159,7 +190,7 @@ function setupCreator() {
   });
 }
 
-// Password Gate Flow
+// Gate Flow
 function setupGate() {
   const unlockBtn = document.getElementById("unlockBtn");
   const passInput = document.getElementById("unlockPasscode");
@@ -187,14 +218,14 @@ async function startCelebration() {
   document.getElementById("displayMessage").innerText = CONFIG.message;
   document.getElementById("celebrationScreen").classList.remove("hidden");
 
-  // Decrypt assets in memory using the gate passcode
+  // Decrypt photos straight from memory
   const slideIds = ["slide1", "slide2", "slide3"];
   for (let i = 0; i < slideIds.length; i++) {
     try {
-      const blobUrl = await decryptFile(`assets/photo${i + 1}.enc`, CONFIG.password);
-      document.getElementById(slideIds[i]).src = blobUrl;
+      const dataUrl = await decryptPayload(CONFIG.photos[i], CONFIG.password);
+      document.getElementById(slideIds[i]).src = dataUrl;
     } catch (err) {
-      console.error(`Failed to decrypt photo${i + 1}:`, err);
+      console.error(`Failed to decrypt photo ${i + 1}:`, err);
     }
   }
 
@@ -256,4 +287,3 @@ function initGame() {
 
   moveTarget();
 }
-
