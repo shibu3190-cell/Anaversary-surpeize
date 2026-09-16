@@ -1,17 +1,17 @@
-# Celebratory Website
+# Celebratory Website Creator
 
-1. To edit password/text/captions: only touch the CONFIG object at top of script.js
-2. Exact git commands:
-   git init
-   git add .
-   git commit -m "Initial deploy"
-   git branch -M main
-   git remote add origin <URL>
-   git push -u origin main
-3. Go to GitHub repo Settings > Pages > Source: main branch, folder: / (root) > Save. Live in 1-2 minutes at the URL shown.
+1. **To use:** Open `index.html` in your browser. Fill in the title, message, and password.
+2. Click **Generate Link**.
+3. Copy the link and send it to her.
+4. When she clicks it, she will see the landing page and password gate you created.
 
-## Assets
-Place your images in the `assets/` folder:
-- photo1.jpg (Used for landing background and first slide)
-- photo2.jpg
-- photo3.jpg
+**Git Commands:**
+git init
+git add .
+git commit -m "Initial deploy"
+git branch -M main
+git remote add origin <YOUR_GITHUB_URL>
+git push -u origin main
+
+**Deployment:**
+Go to GitHub Settings > Pages > Set source to 'main' branch > Save.
