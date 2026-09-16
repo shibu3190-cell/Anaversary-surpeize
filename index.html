@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Anniversary Surprise</title>
+  <title>Surprise</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Screen 1: Unified Creator & Encryptor Form -->
+  <!-- Screen 1: Creator Form -->
   <div id="creatorScreen" class="screen">
     <div class="card">
       <h2>Create a Surprise</h2>
@@ -22,20 +22,15 @@
         <label for="passwordInput">Secret Passcode</label>
         <input type="password" id="passwordInput" placeholder="Enter secret passcode" required>
 
-        <label for="photoFiles">Select 3 Photos (to encrypt locally)</label>
+        <label for="photoFiles">Select 3 Photos</label>
         <input type="file" id="photoFiles" multiple accept="image/*" required>
 
-        <button type="submit" id="generateBtn">Encrypt Photos & Generate Link</button>
+        <button type="submit" id="generateBtn">Create Surprise Link</button>
       </form>
 
       <div id="linkResult" class="hidden">
-        <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
-        <label>1. Download your encrypted assets:</label>
-        <div id="downloadLinks" class="download-container"></div>
-        <p class="hint">Move these 3 files into your project's <code>assets/</code> folder before sharing.</p>
-
-        <label style="margin-top: 15px;">2. Share this link:</label>
-        <input type="text" id="generatedUrl" readonly>
+        <label style="margin-top: 15px;">Your link is ready to share:</label>
+        <textarea id="generatedUrl" rows="4" readonly></textarea>
         <button id="copyBtn" type="button">Copy Link</button>
       </div>
     </div>
