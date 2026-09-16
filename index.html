@@ -3,68 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Celebration</title>
+    <title>A Special Surprise</title>
+    <!-- Elegant Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Montserrat:wght@300;400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <!-- Landing Screen -->
-    <section id="landing-screen" class="screen active">
-        <div class="bg-fallback">🎉</div>
-        <div id="landing-bg" class="full-bg"></div>
+    <!-- Floating Hearts Background (Global) -->
+    <div class="heart-bg" id="heart-container"></div>
+
+    <!-- 1. Landing Screen -->
+    <section id="screen-landing" class="screen active">
+        <div class="bg-image-container" id="landing-bg"></div>
         <div class="overlay"></div>
         <div class="content">
-            <h1 id="landing-title"></h1>
-            <p id="landing-msg"></p>
-            <button id="btn-enter" class="primary-btn">Enter</button>
+            <h1 id="conf-title" class="fade-in"></h1>
+            <p id="conf-landing-msg" class="fade-in delay-1"></p>
+            <button class="primary-btn fade-in delay-2" onclick="showScreen('screen-password')">Enter</button>
         </div>
     </section>
 
-    <!-- Password Gate -->
-    <section id="password-screen" class="screen hidden">
-        <div class="content">
-            <h2>Security Check</h2>
-            <p>Please enter the access code</p>
-            <div class="input-container">
-                <input type="password" id="pass-input" placeholder="•••••••" inputmode="numeric">
-                <button id="btn-unlock" class="primary-btn">Unlock</button>
-            </div>
-            <div id="error-msg" class="error">Incorrect Password</div>
+    <!-- 2. Password Gate -->
+    <section id="screen-password" class="screen">
+        <div class="glass-card">
+            <h2>Unlock the Magic</h2>
+            <p>Please enter your secret code</p>
+            <input type="password" id="pass-input" placeholder="•••••••" inputmode="numeric">
+            <button class="primary-btn" onclick="validatePassword()">Unlock</button>
+            <p id="error-msg" class="error">Incorrect code. Try again, love.</p>
         </div>
     </section>
 
-    <!-- Main Content -->
-    <section id="main-content" class="screen hidden">
-        <div class="scroll-container">
-            <div class="message-block">
-                <h2 id="main-title"></h2>
+    <!-- 3. Unlocked Screen -->
+    <section id="screen-main" class="screen">
+        <div class="main-scrollable">
+            <div class="personal-note glass-card">
+                <h2 id="conf-personal-title"></h2>
+                <p id="conf-personal-msg">Loading your message...</p>
             </div>
 
             <!-- Image Slider -->
-            <div class="slider" id="main-slider">
-                <div class="slides-wrapper" id="slides-wrapper">
-                    <!-- Injected by JS -->
-                </div>
-                <button class="nav-arrow prev" id="prev-btn">❮</button>
-                <button class="nav-arrow next" id="next-btn">❯</button>
+            <div class="slider-container" id="slider">
+                <div class="slider-wrapper" id="slider-wrapper"></div>
+                <button class="nav-btn prev" onclick="moveSlider(-1)">❮</button>
+                <button class="nav-btn next" onclick="moveSlider(1)">❯</button>
             </div>
 
             <!-- Reaction Game -->
-            <div class="game-container">
-                <h3>Catch the Magic</h3>
-                <p>Tap 10 items to win! Score: <span id="score">0</span></p>
-                <div id="game-board">
-                    <div id="target" class="target-emoji">✨</div>
+            <div class="game-section glass-card">
+                <h3>Catch My Heart</h3>
+                <p>Score: <span id="score-val">0</span>/10</p>
+                <div id="game-area">
+                    <div id="game-target">💝</div>
                 </div>
             </div>
         </div>
 
         <!-- Win Overlay -->
-        <div id="win-screen" class="win-overlay hidden">
-            <div class="win-box">
-                <h2 id="win-msg-display"></h2>
-                <button onclick="location.reload()" class="primary-btn">Play Again</button>
+        <div id="win-overlay" class="win-overlay">
+            <div class="glass-card">
+                <h2 id="conf-win-msg"></h2>
+                <button class="primary-btn" onclick="location.reload()">Replay</button>
             </div>
         </div>
     </section>
