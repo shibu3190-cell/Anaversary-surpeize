@@ -8,7 +8,7 @@
 </head>
 <body>
 
-  <!-- Screen 1: Creator Form (shows when no ?d= query param) -->
+  <!-- Screen 1: Unified Creator & Encryptor Form -->
   <div id="creatorScreen" class="screen">
     <div class="card">
       <h2>Create a Surprise</h2>
@@ -17,16 +17,24 @@
         <input type="text" id="titleInput" placeholder="Happy Anniversary!" required>
 
         <label for="messageInput">Special Message</label>
-        <textarea id="messageInput" rows="4" placeholder="Write your heartfelt message here..." required></textarea>
+        <textarea id="messageInput" rows="3" placeholder="Write your heartfelt message here..." required></textarea>
 
         <label for="passwordInput">Secret Passcode</label>
-        <input type="password" id="passwordInput" placeholder="Enter secret code" required>
+        <input type="password" id="passwordInput" placeholder="Enter secret passcode" required>
 
-        <button type="submit">Generate Link</button>
+        <label for="photoFiles">Select 3 Photos (to encrypt locally)</label>
+        <input type="file" id="photoFiles" multiple accept="image/*" required>
+
+        <button type="submit" id="generateBtn">Encrypt Photos & Generate Link</button>
       </form>
 
       <div id="linkResult" class="hidden">
-        <label>Share this link:</label>
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+        <label>1. Download your encrypted assets:</label>
+        <div id="downloadLinks" class="download-container"></div>
+        <p class="hint">Move these 3 files into your project's <code>assets/</code> folder before sharing.</p>
+
+        <label style="margin-top: 15px;">2. Share this link:</label>
         <input type="text" id="generatedUrl" readonly>
         <button id="copyBtn" type="button">Copy Link</button>
       </div>
@@ -44,16 +52,15 @@
     </div>
   </div>
 
-  <!-- Screen 3: Main Celebration & Content -->
+  <!-- Screen 3: Celebration Screen -->
   <div id="celebrationScreen" class="screen hidden">
     <h1 id="celebrationTitle"></h1>
 
-    <!-- Image Slider -->
     <div class="slider-container">
       <div class="slider">
-        <img src="assets/photo1.jpg" alt="Memory 1" class="slide active">
-        <img src="assets/photo2.jpg" alt="Memory 2" class="slide">
-        <img src="assets/photo3.jpg" alt="Memory 3" class="slide">
+        <img id="slide1" alt="Memory 1" class="slide active">
+        <img id="slide2" alt="Memory 2" class="slide">
+        <img id="slide3" alt="Memory 3" class="slide">
       </div>
     </div>
 
@@ -61,7 +68,6 @@
       <p id="displayMessage"></p>
     </div>
 
-    <!-- Mini Game Section -->
     <div class="game-section">
       <h3>Catch the Hearts!</h3>
       <p>Score 10 to reveal the final message. Current Score: <span id="scoreDisplay">0</span></p>
