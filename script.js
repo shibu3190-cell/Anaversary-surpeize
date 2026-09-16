@@ -9,92 +9,8 @@ let score = 0;
 const targetScore = 10;
 let sliderInterval = null;
 
-// Safe Uint8Array to Base64 (prevents call stack overflow on large buffers)
-function bufferToBase64(buffer) {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  const chunkSize = 0x8000; // 32KB chunks
-  for (let i = 0; i < len; i += chunkSize) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
-}
-
-// Safe Base64 to Uint8Array
-function base64ToBuffer(base64) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-// UTF-8 string encoding / decoding for JSON payloads
-function stringToUint8(str) {
-  return new TextEncoder().encode(str);
-}
-
-function uint8ToString(bytes) {
-  return new TextDecoder().decode(bytes);
-}
-
-// Web Crypto Key Derivation (PBKDF2)
-async function deriveKey(password, salt, usage) {
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]
-  );
-  return crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
-    keyMaterial,
-    { name: "AES-GCM", length: 256 },
-    false,
-    [usage]
-  );
-}
-
-// Encrypt string with AES-GCM
-async function encryptPayload(text, password) {
-  const data = stringToUint8(text);
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveKey(password, salt, "encrypt");
-
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv },
-    key,
-    data
-  );
-
-  const combined = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
-  combined.set(salt, 0);
-  combined.set(iv, 16);
-  combined.set(new Uint8Array(ciphertext), 28);
-
-  return bufferToBase64(combined.buffer);
-}
-
-// Decrypt string with AES-GCM
-async function decryptPayload(base64Data, password) {
-  const data = base64ToBuffer(base64Data);
-  const salt = data.slice(0, 16);
-  const iv = data.slice(16, 28);
-  const encryptedBytes = data.slice(28);
-
-  const key = await deriveKey(password, salt, "decrypt");
-  const decryptedBuffer = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: iv },
-    key,
-    encryptedBytes
-  );
-
-  return uint8ToString(new Uint8Array(decryptedBuffer));
-}
-
-// Compress images to tight WebP dimensions to allow fitting in URL hash
-function compressImage(file, maxWidth = 380, quality = 0.55) {
+// Lightweight image resizer (keeps memory low to prevent mobile UI freeze)
+function resizeImage(file, maxWidth = 320, quality = 0.5) {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -113,7 +29,7 @@ function compressImage(file, maxWidth = 380, quality = 0.55) {
         canvas.height = height;
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/webp", quality));
+        resolve(canvas.toDataURL("image/jpeg", quality));
       };
       img.src = e.target.result;
     };
@@ -122,7 +38,6 @@ function compressImage(file, maxWidth = 380, quality = 0.55) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Read hash payload or query param 'd'
   const rawHash = window.location.hash ? window.location.hash.substring(1) : "";
   const urlParams = new URLSearchParams(window.location.search);
   const dataParam = rawHash || urlParams.get("d");
@@ -131,7 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("creatorScreen").classList.add("hidden");
 
     try {
-      const jsonString = uint8ToString(base64ToBuffer(decodeURIComponent(dataParam)));
+      const jsonString = decodeURIComponent(escape(atob(decodeURIComponent(dataParam))));
       CONFIG = JSON.parse(jsonString);
 
       if (!CONFIG.title || !CONFIG.password) {
@@ -163,36 +78,34 @@ function setupCreator() {
     const password = document.getElementById("passwordInput").value.trim();
 
     if (files.length < 3) {
-      alert("Please select 3 photos.");
+      alert("Please select at least 3 photos.");
       return;
     }
 
     generateBtn.disabled = true;
-    generateBtn.innerText = "Encrypting photos...";
+    generateBtn.innerText = "Processing photos...";
 
     try {
-      const encryptedPhotos = [];
+      const photos = [];
       for (let i = 0; i < 3; i++) {
-        const compressed = await compressImage(files[i]);
-        const encrypted = await encryptPayload(compressed, password);
-        encryptedPhotos.push(encrypted);
+        const compressed = await resizeImage(files[i]);
+        photos.push(compressed);
       }
 
       const data = {
         title: document.getElementById("titleInput").value.trim(),
         message: document.getElementById("messageInput").value.trim(),
         password: password,
-        photos: encryptedPhotos
+        photos: photos
       };
 
-      const jsonStr = JSON.stringify(data);
-      const base64Data = bufferToBase64(stringToUint8(jsonStr).buffer);
-      const finalUrl = window.location.origin + window.location.pathname + "#" + encodeURIComponent(base64Data);
+      const base64String = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+      const finalUrl = window.location.origin + window.location.pathname + "#" + encodeURIComponent(base64String);
 
       document.getElementById("generatedUrl").value = finalUrl;
       document.getElementById("linkResult").classList.remove("hidden");
     } catch (err) {
-      alert("Encryption error: " + err.message);
+      alert("Error: " + err.message);
     } finally {
       generateBtn.disabled = false;
       generateBtn.innerText = "Create Surprise Link";
@@ -215,10 +128,10 @@ function setupGate() {
   const passInput = document.getElementById("unlockPasscode");
   const gateError = document.getElementById("gateError");
 
-  const verifyPasscode = async () => {
+  const verifyPasscode = () => {
     if (passInput.value.trim() === CONFIG.password) {
       document.getElementById("gateScreen").classList.add("hidden");
-      await startCelebration();
+      startCelebration();
     } else {
       gateError.classList.remove("hidden");
     }
@@ -230,25 +143,28 @@ function setupGate() {
   });
 }
 
-async function startCelebration() {
+function startCelebration() {
   document.title = CONFIG.title;
   document.getElementById("celebrationTitle").innerText = CONFIG.title;
   document.getElementById("displayMessage").innerText = CONFIG.message;
-  document.getElementById("celebrationScreen").classList.remove("hidden");
 
-  // Decrypt photos directly in memory
-  const slideIds = ["slide1", "slide2", "slide3"];
-  for (let i = 0; i < slideIds.length; i++) {
-    try {
-      const dataUrl = await decryptPayload(CONFIG.photos[i], CONFIG.password);
-      document.getElementById(slideIds[i]).src = dataUrl;
-    } catch (err) {
-      console.error(`Decryption failed for photo ${i + 1}:`, err);
-    }
+  // 1. Reveal celebration screen first so container dimensions are measurable
+  const celebScreen = document.getElementById("celebrationScreen");
+  celebScreen.classList.remove("hidden");
+
+  // Load photos into slides
+  if (CONFIG.photos && CONFIG.photos.length >= 3) {
+    document.getElementById("slide1").src = CONFIG.photos[0];
+    document.getElementById("slide2").src = CONFIG.photos[1];
+    document.getElementById("slide3").src = CONFIG.photos[2];
   }
 
   initSlider();
-  initGame();
+
+  // 2. Wait for browser layout to complete before computing game coordinates
+  requestAnimationFrame(() => {
+    initGame();
+  });
 }
 
 function initSlider() {
@@ -271,18 +187,30 @@ function initGame() {
   const winOverlay = document.getElementById("winOverlay");
   const closeOverlayBtn = document.getElementById("closeOverlayBtn");
 
-  function moveTarget() {
-    const maxX = gameArea.clientWidth - 50;
-    const maxY = gameArea.clientHeight - 50;
+  score = 0;
+  scoreDisplay.innerText = "0";
+  target.style.display = "block";
 
-    const randX = Math.floor(Math.random() * maxX) + 25;
-    const randY = Math.floor(Math.random() * maxY) + 25;
+  function moveTarget() {
+    const areaW = gameArea.clientWidth || 300;
+    const areaH = gameArea.clientHeight || 220;
+
+    const maxX = Math.max(areaW - 60, 40);
+    const maxY = Math.max(areaH - 60, 40);
+
+    const randX = Math.floor(Math.random() * maxX) + 30;
+    const randY = Math.floor(Math.random() * maxY) + 30;
 
     target.style.left = `${randX}px`;
     target.style.top = `${randY}px`;
   }
 
-  function hit() {
+  function hit(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
     score++;
     scoreDisplay.innerText = score;
 
@@ -294,15 +222,11 @@ function initGame() {
     }
   }
 
-  // Pointerdown handles both touch and click once without double firing
-  target.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    hit();
-  });
+  target.onpointerdown = hit;
 
-  closeOverlayBtn.addEventListener("click", () => {
+  closeOverlayBtn.onclick = () => {
     winOverlay.classList.add("hidden");
-  });
+  };
 
   moveTarget();
 }
