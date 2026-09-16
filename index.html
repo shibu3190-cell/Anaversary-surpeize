@@ -8,7 +8,7 @@
 </head>
 <body>
 
-  <!-- Screen 1: Creator Form -->
+  <!-- Screen 1: Creator Screen -->
   <div id="creatorScreen" class="screen">
     <div class="card">
       <h2>Create a Surprise</h2>
@@ -17,7 +17,7 @@
         <input type="text" id="titleInput" placeholder="Happy Anniversary!" required>
 
         <label for="messageInput">Special Message</label>
-        <textarea id="messageInput" rows="3" placeholder="Write your heartfelt message here..." required></textarea>
+        <textarea id="messageInput" rows="3" placeholder="Write your message here..." required></textarea>
 
         <label for="passwordInput">Secret Passcode</label>
         <input type="password" id="passwordInput" placeholder="Enter secret passcode" required>
@@ -36,18 +36,18 @@
     </div>
   </div>
 
-  <!-- Screen 2: Password Gate -->
+  <!-- Screen 2: Password Gate Screen -->
   <div id="gateScreen" class="screen hidden">
     <div class="card">
       <h2>A Secret Surprise Awaits</h2>
-      <p>Enter the passcode to unlock:</p>
+      <p style="margin: 10px 0;">Enter the passcode to unlock:</p>
       <input type="password" id="unlockPasscode" placeholder="Enter passcode">
       <button id="unlockBtn" type="button">Unlock</button>
       <p id="gateError" class="error hidden">Incorrect passcode, try again!</p>
     </div>
   </div>
 
-  <!-- Screen 3: Celebration Screen -->
+  <!-- Screen 3: Main Celebration Screen -->
   <div id="celebrationScreen" class="screen hidden">
     <h1 id="celebrationTitle"></h1>
 
@@ -59,7 +59,7 @@
       </div>
     </div>
 
-    <div class="card message-card">
+    <div class="card">
       <p id="displayMessage"></p>
     </div>
 
