@@ -1,39 +1,43 @@
 :root {
-    --primary: #ff3b30;
-    --accent: #ff9500;
-    --bg-dark: #1a1a1a;
-    --overlay: rgba(0, 0, 0, 0.65);
-    --fallback-grad: linear-gradient(135deg, #ff416c, #ff4b2b);
+    --primary: #ff758f;
+    --secondary: #ffafbd;
+    --text: #4a4a4a;
+    --white: #ffffff;
+    --glass: rgba(255, 255, 255, 0.8);
 }
 
 * {
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
+}
+
+body, html {
     margin: 0;
     padding: 0;
-}
-
-body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: #000;
-    color: #fff;
-    overflow: hidden;
-    width: 100vw;
-    height: 100vh;
-}
-
-.screen {
-    position: fixed;
-    top: 0;
-    left: 0;
     width: 100%;
     height: 100%;
+    font-family: 'Montserrat', sans-serif;
+    background: #fff5f6;
+    color: var(--text);
+    overflow: hidden;
+}
+
+h1, h2 {
+    font-family: 'Playfair Display', serif;
+    color: #d63384;
+}
+
+/* Screen Management */
+.screen {
+    position: fixed;
+    inset: 0;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.5s ease;
+    transition: opacity 0.8s ease, visibility 0.8s;
     z-index: 1;
 }
 
@@ -43,107 +47,117 @@ body {
     z-index: 10;
 }
 
-.hidden { display: none !important; }
-
-/* Backgrounds & Fallbacks */
-.bg-fallback {
-    position: absolute;
-    inset: 0;
-    background: var(--fallback-grad);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 80px;
-    z-index: -2;
-}
-
-.full-bg {
+/* Landing Background */
+.bg-image-container {
     position: absolute;
     inset: 0;
     background-size: cover;
     background-position: center;
+    background-color: var(--primary); /* Fallback */
+}
+
+.bg-image-container::after {
+    content: "💝";
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 5rem;
     z-index: -1;
 }
 
 .overlay {
     position: absolute;
     inset: 0;
-    background: var(--overlay);
-    -webkit-backdrop-filter: blur(5px);
-    backdrop-filter: blur(5px);
+    background: linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.6));
 }
 
-.content {
-    position: relative;
+/* Floating Hearts */
+.heart-bg {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
     z-index: 5;
-    text-align: center;
-    padding: 20px;
-    width: 100%;
+}
+
+.heart {
+    position: absolute;
+    color: var(--primary);
+    opacity: 0.6;
+    animation: floatUp 6s linear infinite;
+}
+
+@keyframes floatUp {
+    0% { transform: translateY(100vh) scale(0); opacity: 0; }
+    50% { opacity: 0.6; }
+    100% { transform: translateY(-10vh) scale(1.5); opacity: 0; }
 }
 
 /* UI Elements */
+.glass-card {
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    padding: 30px;
+    border-radius: 20px;
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
 .primary-btn {
     background: var(--primary);
     color: white;
     border: none;
-    padding: 12px 30px;
-    border-radius: 25px;
-    font-size: 18px;
+    padding: 15px 40px;
+    border-radius: 50px;
+    font-size: 16px;
     font-weight: 600;
-    min-height: 44px; /* Apple HIG */
-    min-width: 120px;
     cursor: pointer;
+    min-height: 44px;
+    transition: transform 0.2s;
     margin-top: 20px;
 }
 
+.primary-btn:active { transform: scale(0.95); }
+
 #pass-input {
-    display: block;
-    margin: 20px auto;
+    width: 100%;
     padding: 12px;
-    width: 80%;
-    max-width: 250px;
+    margin-top: 20px;
     border-radius: 10px;
-    border: 1px solid #555;
-    background: rgba(255,255,255,0.1);
-    color: #fff;
-    font-size: 20px;
+    border: 1px solid #ddd;
     text-align: center;
-    min-height: 44px;
+    font-size: 18px;
 }
 
-/* Shake Animation */
-.shake { animation: shake 0.4s ease; }
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-10px); }
-    75% { transform: translateX(10px); }
-}
-
-.error { color: var(--primary); margin-top: 10px; font-weight: bold; display: none; }
-
-/* Main Content Styles */
-.scroll-container {
+/* Slider */
+.main-scrollable {
     width: 100%;
     height: 100%;
     overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
     padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
-.slider {
+.slider-container {
     position: relative;
     width: 100%;
-    aspect-ratio: 4/5;
+    max-width: 500px;
+    aspect-ratio: 1/1;
     margin: 30px 0;
-    border-radius: 15px;
+    border-radius: 20px;
     overflow: hidden;
-    background: #222;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.2);
 }
 
-.slides-wrapper {
+.slider-wrapper {
     display: flex;
     height: 100%;
-    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .slide {
@@ -152,85 +166,58 @@ body {
     position: relative;
 }
 
-.slide img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
+.slide img { width: 100%; height: 100%; object-fit: cover; }
 
 .slide-fallback {
-    width: 100%;
-    height: 100%;
-    background: var(--fallback-grad);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 50px;
+    width: 100%; height: 100%;
+    background: var(--primary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 4rem;
 }
 
-.caption {
+.nav-btn {
     position: absolute;
-    bottom: 0;
+    top: 50%; transform: translateY(-50%);
+    background: rgba(255,255,255,0.5);
+    border: none; width: 44px; height: 44px; border-radius: 50%;
+    z-index: 10; cursor: pointer;
+}
+.prev { left: 10px; } .next { right: 10px; }
+
+/* Game */
+#game-area {
     width: 100%;
-    padding: 20px;
-    background: linear-gradient(transparent, rgba(0,0,0,0.85));
-    font-size: 16px;
-}
-
-.nav-arrow {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    background: rgba(0,0,0,0.5);
-    color: white;
-    border: none;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    z-index: 10;
-}
-
-.prev { left: 10px; }
-.next { right: 10px; }
-
-/* Game Section */
-.game-container {
-    background: rgba(255,255,255,0.05);
-    padding: 20px;
+    height: 200px;
+    background: rgba(255,255,255,0.5);
     border-radius: 15px;
-    margin-bottom: 50px;
-}
-
-#game-board {
-    width: 100%;
-    height: 250px;
-    background: rgba(0,0,0,0.3);
-    margin-top: 15px;
     position: relative;
-    border-radius: 10px;
+    margin-top: 15px;
     overflow: hidden;
     touch-action: none;
 }
 
-.target-emoji {
+#game-target {
     position: absolute;
-    font-size: 40px;
-    width: 50px;
-    height: 50px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    font-size: 35px;
     cursor: pointer;
+    width: 50px; height: 50px;
+    display: flex; align-items: center; justify-content: center;
 }
 
 .win-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.9);
+    position: fixed; inset: 0;
+    background: rgba(255,117,143,0.9);
+    display: none; justify-content: center; align-items: center;
     z-index: 100;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 30px;
-    text-align: center;
 }
+
+/* Animations */
+.fade-in { animation: fadeIn 1s forwards; opacity: 0; }
+.delay-1 { animation-delay: 0.5s; }
+.delay-2 { animation-delay: 1s; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.shake { animation: shake 0.4s; }
+@keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
+
+.error { color: #ff4d6d; font-size: 14px; margin-top: 10px; display: none; }
