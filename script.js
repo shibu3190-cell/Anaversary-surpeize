@@ -1,127 +1,171 @@
-let CONFIG = { title: "", msg: "", pass: "" };
+let CONFIG = {
+  title: "",
+  message: "",
+  password: ""
+};
 
-// 1. IMMEDIATE DETECTION (Runs before anything else)
-(function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const data = urlParams.get('d');
-    if (data) {
-        try {
-            // Use decodeURIComponent + escape to handle emojis/special chars
-            CONFIG = JSON.parse(decodeURIComponent(escape(atob(data))));
-            window.isCelebration = true;
-        } catch (e) {
-            console.error("Link Data Error");
-        }
-    }
-})();
+let score = 0;
+const targetScore = 10;
+let sliderInterval = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.isCelebration) {
-        startCelebration();
+document.addEventListener("DOMContentLoaded", () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const dParam = urlParams.get("d");
+
+  if (dParam) {
+    // Hide creator form screen
+    document.getElementById("creatorScreen").classList.add("hidden");
+
+    try {
+      // Decode the URL param safely
+      const jsonString = decodeURIComponent(escape(atob(decodeURIComponent(dParam))));
+      CONFIG = JSON.parse(jsonString);
+
+      if (!CONFIG.title || !CONFIG.password) {
+        throw new Error("Missing required config values");
+      }
+
+      // Show Gate Screen
+      document.getElementById("gateScreen").classList.remove("hidden");
+      setupGate();
+    } catch (error) {
+      console.error("Link Data Error", error);
+      document.body.innerHTML = `
+        <div style="display: flex; height: 100vh; justify-content: center; align-items: center; text-align: center; font-family: sans-serif; padding: 20px;">
+          <h2>This link seems broken — please ask for a new one</h2>
+        </div>
+      `;
     }
+  } else {
+    // No 'd' param, regular creator flow
+    setupCreator();
+  }
 });
 
-function generateLink() {
-    const t = document.getElementById('setup-title').value;
-    const m = document.getElementById('setup-msg').value;
-    const p = document.getElementById('setup-pass').value;
-    
-    if(!t || !p) return alert("Please enter a Title and Password");
+// Setup Link Generation Flow
+function setupCreator() {
+  const form = document.getElementById("creatorForm");
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    generateLink();
+  });
 
-    const dataObj = { title: t, msg: m, pass: p };
-    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(dataObj))));
-    
-    // Get clean URL without existing parameters
-    const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-    const finalUrl = cleanUrl + "?d=" + encoded;
-    
-    const input = document.getElementById('share-url');
-    input.value = finalUrl;
-    document.getElementById('link-output').classList.remove('hidden');
-    
-    // Auto-copy to clipboard
-    input.select();
-    navigator.clipboard.writeText(finalUrl);
-}
-
-function startCelebration() {
-    // Hide setup, show landing
-    document.getElementById('setup-screen').classList.add('hidden');
-    document.getElementById('setup-screen').classList.remove('active');
-    
-    document.getElementById('display-title').innerText = CONFIG.title;
-    document.getElementById('display-msg').innerText = CONFIG.msg;
-    
-    const bg = document.getElementById('landing-bg');
-    bg.style.backgroundImage = "url('assets/photo1.jpg')";
-    
-    const landing = document.getElementById('landing-screen');
-    landing.classList.remove('hidden');
-    setTimeout(() => landing.classList.add('active'), 50);
-}
-
-function showPasswordGate() {
-    switchScreen('landing-screen', 'password-screen');
-}
-
-function checkPassword() {
-    const input = document.getElementById('pass-input');
-    if (input.value === CONFIG.pass) {
-        document.getElementById('final-title').innerText = CONFIG.title;
-        document.getElementById('final-msg').innerText = CONFIG.msg;
-        switchScreen('password-screen', 'main-content');
-        initGame();
-    } else {
-        input.parentElement.classList.add('shake');
-        document.getElementById('error-msg').style.display = 'block';
-        setTimeout(() => input.parentElement.classList.remove('shake'), 300);
-    }
-}
-
-function switchScreen(oldId, newId) {
-    const oldS = document.getElementById(oldId);
-    const newS = document.getElementById(newId);
-    oldS.classList.remove('active');
+  document.getElementById("copyBtn").addEventListener("click", () => {
+    const copyInput = document.getElementById("generatedUrl");
+    copyInput.select();
+    navigator.clipboard.writeText(copyInput.value);
+    document.getElementById("copyBtn").innerText = "Copied!";
     setTimeout(() => {
-        oldS.classList.add('hidden');
-        newS.classList.remove('hidden');
-        setTimeout(() => newS.classList.add('active'), 50);
-    }, 400);
+      document.getElementById("copyBtn").innerText = "Copy Link";
+    }, 2000);
+  });
 }
 
-// Slider Logic
-let curSlide = 0;
-function moveSlide(step) {
-    const wrapper = document.getElementById('slider-wrapper');
-    curSlide = (curSlide + step + 3) % 3;
-    wrapper.style.transform = `translateX(-${curSlide * 100}%)`;
-}
-setInterval(() => moveSlide(1), 4000);
+function generateLink() {
+  const data = {
+    title: document.getElementById("titleInput").value.trim(),
+    message: document.getElementById("messageInput").value.trim(),
+    password: document.getElementById("passwordInput").value.trim()
+  };
 
-// Game Logic
-let score = 0;
+  // Base64 encode with unicode support
+  const base64String = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+
+  // Encoded parameter prevents '+' sign corruption
+  const finalUrl = window.location.origin + window.location.pathname + "?d=" + encodeURIComponent(base64String);
+
+  document.getElementById("generatedUrl").value = finalUrl;
+  document.getElementById("linkResult").classList.remove("hidden");
+}
+
+// Setup Password Gate Flow
+function setupGate() {
+  const unlockBtn = document.getElementById("unlockBtn");
+  const passInput = document.getElementById("unlockPasscode");
+  const gateError = document.getElementById("gateError");
+
+  const verifyPasscode = () => {
+    if (passInput.value.trim() === CONFIG.password) {
+      document.getElementById("gateScreen").classList.add("hidden");
+      startCelebration();
+    } else {
+      gateError.classList.remove("hidden");
+    }
+  };
+
+  unlockBtn.addEventListener("click", verifyPasscode);
+  passInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") verifyPasscode();
+  });
+}
+
+// Start Celebration Flow
+function startCelebration() {
+  // Update browser tab title
+  document.title = CONFIG.title;
+
+  document.getElementById("celebrationTitle").innerText = CONFIG.title;
+  document.getElementById("displayMessage").innerText = CONFIG.message;
+  document.getElementById("celebrationScreen").classList.remove("hidden");
+
+  initSlider();
+  initGame();
+}
+
+// Image Slider Autoplay
+function initSlider() {
+  const slides = document.querySelectorAll(".slide");
+  let currentSlide = 0;
+
+  if (sliderInterval) clearInterval(sliderInterval);
+
+  sliderInterval = setInterval(() => {
+    slides[currentSlide].classList.remove("active");
+    currentSlide = (currentSlide + 1) % slides.length;
+    slides[currentSlide].classList.add("active");
+  }, 3000);
+}
+
+// Game Logic with single pointer interaction
 function initGame() {
-    const target = document.getElementById('target');
-    const area = document.getElementById('game-area');
-    const move = () => {
-        const x = Math.random() * (area.clientWidth - 50);
-        const y = Math.random() * (area.clientHeight - 50);
-        target.style.left = x + 'px';
-        target.style.top = y + 'px';
-    };
-    const hit = (e) => {
-        e.preventDefault();
-        score++;
-        document.getElementById('score').innerText = score;
-        if(score >= 10) document.getElementById('win-overlay').classList.remove('hidden');
-        move();
-    };
-    target.addEventListener('touchstart', hit);
-    target.addEventListener('click', hit);
-    setInterval(move, 1800);
-}
+  const target = document.getElementById("target");
+  const gameArea = document.getElementById("gameArea");
+  const scoreDisplay = document.getElementById("scoreDisplay");
+  const winOverlay = document.getElementById("winOverlay");
+  const closeOverlayBtn = document.getElementById("closeOverlayBtn");
 
-function imgErr(img) {
-    img.parentElement.style.background = "linear-gradient(45deg, #ff758f, #ffafbd)";
-    img.parentElement.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;font-size:40px">💝</div>';
+  function moveTarget() {
+    const maxX = gameArea.clientWidth - 50;
+    const maxY = gameArea.clientHeight - 50;
+
+    const randX = Math.floor(Math.random() * maxX) + 25;
+    const randY = Math.floor(Math.random() * maxY) + 25;
+
+    target.style.left = `${randX}px`;
+    target.style.top = `${randY}px`;
+  }
+
+  function hit() {
+    score++;
+    scoreDisplay.innerText = score;
+
+    if (score >= targetScore) {
+      target.style.display = "none";
+      winOverlay.classList.remove("hidden");
+    } else {
+      moveTarget();
+    }
+  }
+
+  // Pointerdown captures both touch and click without double-firing
+  target.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    hit();
+  });
+
+  closeOverlayBtn.addEventListener("click", () => {
+    winOverlay.classList.add("hidden");
+  });
+
+  moveTarget();
 }
