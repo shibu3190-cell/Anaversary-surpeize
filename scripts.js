@@ -1,66 +1,61 @@
 const CONFIG = {
   password: "1234567",
-  occasionTitle: "Happy Birthday!",
-  landingMessage: "A little surprise for someone special.",
+  occasionTitle: "Happy Anniversary",
+  landingMessage: "A journey of a thousand miles began with a single step. Click to see our story.",
   slides: [
-    { image: "assets/photo1.jpg", caption: "The beginning of a beautiful journey." },
-    { image: "assets/photo2.jpg", caption: "Every moment with you is a treasure." },
-    { image: "assets/photo3.jpg", caption: "Here's to a future full of joy!" }
+    { image: "assets/photo1.jpg", caption: "Where it all began..." },
+    { image: "assets/photo2.jpg", caption: "My favorite memory of us." },
+    { image: "assets/photo3.jpg", caption: "To many more years together." }
   ],
-  winMessage: "You caught all the magic! You're amazing. ✨"
+  winMessage: "You've won my heart (again)! ❤️"
 };
 
-/** 
- * NOTE: This is client-side only security for a celebratory experience. 
- * It is not intended for sensitive data. 
+/**
+ * NOTE: This is client-side security for a celebratory experience.
+ * It is not intended for actual data protection.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Initial UI Fill
-    document.getElementById('landing-title').innerText = CONFIG.occasionTitle;
-    document.getElementById('landing-msg').innerText = CONFIG.landingMessage;
-    document.getElementById('main-title').innerText = CONFIG.occasionTitle;
-    document.getElementById('win-msg-display').innerText = CONFIG.winMessage;
-
-    // Handle Landing Background Fallback
-    const lBg = document.getElementById('landing-bg');
-    const img = new Image();
-    img.src = CONFIG.slides[0].image;
-    img.onload = () => lBg.style.backgroundImage = `url('${img.src}')`;
-    
-    // Setup Slider
+    initContent();
+    createHearts();
     setupSlider();
 });
 
-// Navigation Flow
-document.getElementById('btn-enter').addEventListener('click', () => {
-    switchScreen('landing-screen', 'password-screen');
-});
+function initContent() {
+    document.getElementById('conf-title').innerText = CONFIG.occasionTitle;
+    document.getElementById('conf-landing-msg').innerText = CONFIG.landingMessage;
+    document.getElementById('conf-personal-title').innerText = CONFIG.occasionTitle;
+    document.getElementById('conf-personal-msg').innerText = CONFIG.landingMessage;
+    document.getElementById('conf-win-msg').innerText = CONFIG.winMessage;
 
-document.getElementById('btn-unlock').addEventListener('click', () => {
-    const val = document.getElementById('pass-input').value;
-    if (val === CONFIG.password) {
-        switchScreen('password-screen', 'main-content');
-        startGame();
+    // Set landing background with fallback
+    const bg = document.getElementById('landing-bg');
+    const img = new Image();
+    img.src = CONFIG.slides[0].image;
+    img.onload = () => bg.style.backgroundImage = `url('${img.src}')`;
+    img.onerror = () => bg.style.background = "linear-gradient(45deg, #ff758f, #ffafbd)";
+}
+
+function showScreen(screenId) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const target = document.getElementById(screenId);
+    target.classList.add('active');
+}
+
+function validatePassword() {
+    const input = document.getElementById('pass-input');
+    const error = document.getElementById('error-msg');
+    if (input.value === CONFIG.password) {
+        showScreen('screen-main');
+        initGame();
     } else {
-        const input = document.getElementById('pass-input');
-        const err = document.getElementById('error-msg');
-        input.classList.add('shake');
-        err.style.display = 'block';
+        input.parentElement.classList.add('shake');
+        error.style.display = 'block';
         setTimeout(() => {
-            input.classList.remove('shake');
+            input.parentElement.classList.remove('shake');
             input.value = '';
         }, 400);
     }
-});
-
-function switchScreen(oldId, newId) {
-    document.getElementById(oldId).classList.remove('active');
-    setTimeout(() => {
-        document.getElementById(oldId).classList.add('hidden');
-        document.getElementById(newId).classList.remove('hidden');
-        setTimeout(() => document.getElementById(newId).classList.add('active'), 50);
-    }, 500);
 }
 
 // Slider Logic
@@ -68,81 +63,83 @@ let currentSlide = 0;
 let slideInterval;
 
 function setupSlider() {
-    const wrapper = document.getElementById('slides-wrapper');
-    CONFIG.slides.forEach(s => {
-        const slide = document.createElement('div');
-        slide.className = 'slide';
-        slide.innerHTML = `
-            <img src="${s.image}" onerror="this.outerHTML='<div class=\'slide-fallback\'>💝</div>'">
-            <div class="caption">${s.caption}</div>
+    const wrapper = document.getElementById('slider-wrapper');
+    CONFIG.slides.forEach(slide => {
+        const div = document.createElement('div');
+        div.className = 'slide';
+        div.innerHTML = `
+            <img src="${slide.image}" onerror="this.outerHTML='<div class=\'slide-fallback\'>🎉</div>'">
+            <div class="caption" style="position:absolute; bottom:0; background:rgba(0,0,0,0.6); color:white; width:100%; padding:15px; font-size:14px;">${slide.caption}</div>
         `;
-        wrapper.appendChild(slide);
+        wrapper.appendChild(div);
     });
-
-    const update = () => {
-        wrapper.style.transform = `translateX(-${currentSlide * 100}%)`;
-    };
-
-    const next = () => {
-        currentSlide = (currentSlide + 1) % CONFIG.slides.length;
-        update();
-    };
-
-    const prev = () => {
-        currentSlide = (currentSlide - 1 + CONFIG.slides.length) % CONFIG.slides.length;
-        update();
-    };
-
-    document.getElementById('next-btn').addEventListener('click', () => { next(); startTimer(); });
-    document.getElementById('prev-btn').addEventListener('click', () => { prev(); startTimer(); });
+    startAutoPlay();
 
     // Swipe Support
     let startX = 0;
     wrapper.addEventListener('touchstart', e => startX = e.touches[0].clientX, {passive: true});
     wrapper.addEventListener('touchend', e => {
-        let diff = startX - e.changedTouches[0].clientX;
-        if (Math.abs(diff) > 50) {
-            diff > 0 ? next() : prev();
-            startTimer();
-        }
+        let endX = e.changedTouches[0].clientX;
+        if (startX - endX > 50) moveSlider(1);
+        if (endX - startX > 50) moveSlider(-1);
     }, {passive: true});
+}
 
-    const startTimer = () => {
-        clearInterval(slideInterval);
-        slideInterval = setInterval(next, 4000);
-    };
-    startTimer();
+function moveSlider(dir) {
+    currentSlide = (currentSlide + dir + CONFIG.slides.length) % CONFIG.slides.length;
+    document.getElementById('slider-wrapper').style.transform = `translateX(-${currentSlide * 100}%)`;
+    startAutoPlay();
+}
+
+function startAutoPlay() {
+    clearInterval(slideInterval);
+    slideInterval = setInterval(() => moveSlider(1), 4000);
 }
 
 // Game Logic
 let score = 0;
 let gameTimer;
-const target = document.getElementById('target');
-const board = document.getElementById('game-board');
 
-function startGame() {
-    moveTarget();
+function initGame() {
+    const target = document.getElementById('game-target');
+    const triggerMove = () => {
+        const area = document.getElementById('game-area');
+        const x = Math.random() * (area.clientWidth - 50);
+        const y = Math.random() * (area.clientHeight - 50);
+        target.style.left = x + 'px';
+        target.style.top = y + 'px';
+        gameTimer = setTimeout(triggerMove, 1500);
+    };
+
+    const handleHit = (e) => {
+        e.preventDefault();
+        score++;
+        document.getElementById('score-val').innerText = score;
+        if (score >= 10) {
+            document.getElementById('win-overlay').style.display = 'flex';
+            clearTimeout(gameTimer);
+        } else {
+            clearTimeout(gameTimer);
+            triggerMove();
+        }
+    };
+
     target.addEventListener('touchstart', handleHit);
-    target.addEventListener('mousedown', handleHit);
+    target.addEventListener('click', handleHit);
+    triggerMove();
 }
 
-function handleHit(e) {
-    e.preventDefault();
-    score++;
-    document.getElementById('score').innerText = score;
-    if (score >= 10) {
-        document.getElementById('win-screen').classList.remove('hidden');
-        clearTimeout(gameTimer);
-    } else {
-        moveTarget();
-    }
-}
-
-function moveTarget() {
-    clearTimeout(gameTimer);
-    const x = Math.random() * (board.clientWidth - 50);
-    const y = Math.random() * (board.clientHeight - 50);
-    target.style.left = `${x}px`;
-    target.style.top = `${y}px`;
-    gameTimer = setTimeout(moveTarget, 1500);
+// Decorative Hearts
+function createHearts() {
+    const container = document.getElementById('heart-container');
+    setInterval(() => {
+        const heart = document.createElement('div');
+        heart.className = 'heart';
+        heart.innerHTML = '❤';
+        heart.style.left = Math.random() * 100 + 'vw';
+        heart.style.fontSize = (Math.random() * 20 + 10) + 'px';
+        heart.style.animationDuration = (Math.random() * 3 + 3) + 's';
+        container.appendChild(heart);
+        setTimeout(() => heart.remove(), 6000);
+    }, 800);
 }
