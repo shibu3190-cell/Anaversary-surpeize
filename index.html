@@ -12,18 +12,17 @@
     <!-- SETUP SCREEN (Visible only to you) -->
     <section id="setup-screen" class="screen active">
         <div class="glass-card">
-            <h1>Create Celebration</h1>
-            <p>Fill this out, then send the generated link to her.</p>
-            <input type="text" id="setup-title" placeholder="Occasion (e.g. Happy Anniversary)">
+            <h1>Link Creator</h1>
+            <p>Fill this out to create her surprise link.</p>
+            <input type="text" id="setup-title" placeholder="Occasion (e.g. Happy Birthday)">
             <textarea id="setup-msg" placeholder="Your personal message..."></textarea>
             <input type="text" id="setup-pass" placeholder="Set a Password">
-            <button class="primary-btn" onclick="generateLink()">Generate Link</button>
+            <button class="primary-btn" onclick="generateLink()">Create & Copy Link</button>
             
             <div id="link-output" class="hidden">
-                <hr>
-                <p><strong>Link Ready!</strong> Copy and send this:</p>
+                <p class="success-text">✅ Link Created & Copied!</p>
                 <input type="text" id="share-url" readonly>
-                <button class="primary-btn secondary" id="copy-btn" onclick="copyLink()">Copy Link</button>
+                <p style="font-size: 12px; color: #666;">Paste this link in WhatsApp/iMessage to send to her.</p>
             </div>
         </div>
     </section>
@@ -46,7 +45,7 @@
             <p>Enter the secret code</p>
             <input type="password" id="pass-input" placeholder="•••••••" inputmode="numeric">
             <button class="primary-btn" onclick="checkPassword()">Unlock</button>
-            <p id="error-msg" class="error">Incorrect password, try again.</p>
+            <p id="error-msg" class="error">Incorrect password.</p>
         </div>
     </section>
 
@@ -58,11 +57,11 @@
                 <p id="final-msg"></p>
             </div>
 
-            <div class="slider" id="slider">
+            <div class="slider">
                 <div class="slider-wrapper" id="slider-wrapper">
-                    <div class="slide"><img src="assets/photo1.jpg" onerror="imgError(this)"><div class="caption">Forever</div></div>
-                    <div class="slide"><img src="assets/photo2.jpg" onerror="imgError(this)"><div class="caption">Always</div></div>
-                    <div class="slide"><img src="assets/photo3.jpg" onerror="imgError(this)"><div class="caption">Together</div></div>
+                    <div class="slide"><img src="assets/photo1.jpg" onerror="imgErr(this)"><div class="caption">Forever</div></div>
+                    <div class="slide"><img src="assets/photo2.jpg" onerror="imgErr(this)"><div class="caption">Always</div></div>
+                    <div class="slide"><img src="assets/photo3.jpg" onerror="imgErr(this)"><div class="caption">Together</div></div>
                 </div>
                 <button class="nav-btn prev" onclick="moveSlide(-1)">❮</button>
                 <button class="nav-btn next" onclick="moveSlide(1)">❯</button>
@@ -78,7 +77,7 @@
 
     <div id="win-overlay" class="win-overlay hidden">
         <div class="glass-card">
-            <h2>Celebration Complete! 🎉</h2>
+            <h2>You're Amazing! 🎉</h2>
             <button class="primary-btn" onclick="location.reload()">View Again</button>
         </div>
     </div>
