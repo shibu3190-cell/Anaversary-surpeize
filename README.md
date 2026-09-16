@@ -1,17 +1,17 @@
-# Celebratory Website Creator
+# Celebration Link Creator
 
-1. **To use:** Open `index.html` in your browser. Fill in the title, message, and password.
-2. Click **Generate Link**.
-3. Copy the link and send it to her.
-4. When she clicks it, she will see the landing page and password gate you created.
+1. **Open the site** (index.html).
+2. **Fill in the details**: Title, Message, and Password.
+3. **Click "Generate Link"**: A link will appear at the bottom.
+4. **Copy and Send**: Send that specific link to her.
 
 **Git Commands:**
 git init
 git add .
-git commit -m "Initial deploy"
+git commit -m "Fix link generation"
 git branch -M main
-git remote add origin <YOUR_GITHUB_URL>
+git remote add origin <URL>
 git push -u origin main
 
-**Deployment:**
-Go to GitHub Settings > Pages > Set source to 'main' branch > Save.
+**GitHub Pages:**
+Settings > Pages > Source: main branch > Save.
