@@ -13,19 +13,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const dParam = urlParams.get("d");
 
   if (dParam) {
-    // Hide creator form screen
     document.getElementById("creatorScreen").classList.add("hidden");
 
     try {
-      // Decode the URL param safely
       const jsonString = decodeURIComponent(escape(atob(decodeURIComponent(dParam))));
       CONFIG = JSON.parse(jsonString);
 
       if (!CONFIG.title || !CONFIG.password) {
-        throw new Error("Missing required config values");
+        throw new Error("Missing config values");
       }
 
-      // Show Gate Screen
       document.getElementById("gateScreen").classList.remove("hidden");
       setupGate();
     } catch (error) {
@@ -37,17 +34,118 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
     }
   } else {
-    // No 'd' param, regular creator flow
     setupCreator();
   }
 });
 
-// Setup Link Generation Flow
+// Key Derivation Helper (PBKDF2)
+async function deriveKey(password, salt, usage) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    [usage]
+  );
+}
+
+// Encrypt File to Uint8Array [16B salt + 12B IV + ciphertext]
+async function encryptFile(buffer, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(password, salt, "encrypt");
+
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: iv },
+    key,
+    buffer
+  );
+
+  const combined = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
+  combined.set(salt, 0);
+  combined.set(iv, 16);
+  combined.set(new Uint8Array(ciphertext), 28);
+  return combined;
+}
+
+// Decrypt Binary Asset from Server
+async function decryptFile(url, password) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Could not fetch ${url}`);
+  const arrayBuffer = await response.arrayBuffer();
+
+  const data = new Uint8Array(arrayBuffer);
+  const salt = data.slice(0, 16);
+  const iv = data.slice(16, 28);
+  const encryptedBytes = data.slice(28);
+
+  const key = await deriveKey(password, salt, "decrypt");
+  const decryptedBuffer = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: iv },
+    key,
+    encryptedBytes
+  );
+
+  const blob = new Blob([decryptedBuffer], { type: "image/jpeg" });
+  return URL.createObjectURL(blob);
+}
+
+// Creator Form Flow
 function setupCreator() {
   const form = document.getElementById("creatorForm");
-  form.addEventListener("submit", (e) => {
+  const generateBtn = document.getElementById("generateBtn");
+
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    generateLink();
+    const files = document.getElementById("photoFiles").files;
+    const password = document.getElementById("passwordInput").value.trim();
+
+    if (files.length < 3) {
+      alert("Please select at least 3 photos.");
+      return;
+    }
+
+    generateBtn.disabled = true;
+    generateBtn.innerText = "Encrypting photos...";
+
+    const downloadContainer = document.getElementById("downloadLinks");
+    downloadContainer.innerHTML = "";
+
+    for (let i = 0; i < 3; i++) {
+      const buffer = await files[i].arrayBuffer();
+      const encryptedData = await encryptFile(buffer, password);
+      
+      const blob = new Blob([encryptedData], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const filename = `photo${i + 1}.enc`;
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.className = "download-link";
+      a.innerText = `⬇️ Download ${filename}`;
+      downloadContainer.appendChild(a);
+
+      a.click();
+    }
+
+    const data = {
+      title: document.getElementById("titleInput").value.trim(),
+      message: document.getElementById("messageInput").value.trim(),
+      password: password
+    };
+
+    const base64String = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+    const finalUrl = window.location.origin + window.location.pathname + "?d=" + encodeURIComponent(base64String);
+
+    document.getElementById("generatedUrl").value = finalUrl;
+    document.getElementById("linkResult").classList.remove("hidden");
+    generateBtn.disabled = false;
+    generateBtn.innerText = "Encrypt Photos & Generate Link";
   });
 
   document.getElementById("copyBtn").addEventListener("click", () => {
@@ -61,24 +159,7 @@ function setupCreator() {
   });
 }
 
-function generateLink() {
-  const data = {
-    title: document.getElementById("titleInput").value.trim(),
-    message: document.getElementById("messageInput").value.trim(),
-    password: document.getElementById("passwordInput").value.trim()
-  };
-
-  // Base64 encode with unicode support
-  const base64String = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-
-  // Encoded parameter prevents '+' sign corruption
-  const finalUrl = window.location.origin + window.location.pathname + "?d=" + encodeURIComponent(base64String);
-
-  document.getElementById("generatedUrl").value = finalUrl;
-  document.getElementById("linkResult").classList.remove("hidden");
-}
-
-// Setup Password Gate Flow
+// Password Gate Flow
 function setupGate() {
   const unlockBtn = document.getElementById("unlockBtn");
   const passInput = document.getElementById("unlockPasscode");
@@ -99,20 +180,28 @@ function setupGate() {
   });
 }
 
-// Start Celebration Flow
-function startCelebration() {
-  // Update browser tab title
+// Celebration Flow
+async function startCelebration() {
   document.title = CONFIG.title;
-
   document.getElementById("celebrationTitle").innerText = CONFIG.title;
   document.getElementById("displayMessage").innerText = CONFIG.message;
   document.getElementById("celebrationScreen").classList.remove("hidden");
+
+  // Decrypt assets in memory using the gate passcode
+  const slideIds = ["slide1", "slide2", "slide3"];
+  for (let i = 0; i < slideIds.length; i++) {
+    try {
+      const blobUrl = await decryptFile(`assets/photo${i + 1}.enc`, CONFIG.password);
+      document.getElementById(slideIds[i]).src = blobUrl;
+    } catch (err) {
+      console.error(`Failed to decrypt photo${i + 1}:`, err);
+    }
+  }
 
   initSlider();
   initGame();
 }
 
-// Image Slider Autoplay
 function initSlider() {
   const slides = document.querySelectorAll(".slide");
   let currentSlide = 0;
@@ -126,7 +215,6 @@ function initSlider() {
   }, 3000);
 }
 
-// Game Logic with single pointer interaction
 function initGame() {
   const target = document.getElementById("target");
   const gameArea = document.getElementById("gameArea");
@@ -157,7 +245,6 @@ function initGame() {
     }
   }
 
-  // Pointerdown captures both touch and click without double-firing
   target.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     hit();
@@ -169,3 +256,4 @@ function initGame() {
 
   moveTarget();
 }
+
