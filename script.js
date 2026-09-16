@@ -1,19 +1,23 @@
 let CONFIG = { title: "", msg: "", pass: "" };
 
-document.addEventListener('DOMContentLoaded', () => {
-    const params = new URLSearchParams(window.location.search);
-    const dataParam = params.get('d');
-    
-    if (dataParam) {
+// 1. IMMEDIATE DETECTION (Runs before anything else)
+(function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const data = urlParams.get('d');
+    if (data) {
         try {
-            // Robust decoding for special characters/emojis
-            const decoded = JSON.parse(decodeURIComponent(escape(atob(dataParam))));
-            CONFIG = decoded;
-            startCelebration();
+            // Use decodeURIComponent + escape to handle emojis/special chars
+            CONFIG = JSON.parse(decodeURIComponent(escape(atob(data))));
+            window.isCelebration = true;
         } catch (e) {
-            console.error("Link error:", e);
-            alert("The link seems broken. Please generate a new one.");
+            console.error("Link Data Error");
         }
+    }
+})();
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.isCelebration) {
+        startCelebration();
     }
 });
 
@@ -22,43 +26,28 @@ function generateLink() {
     const m = document.getElementById('setup-msg').value;
     const p = document.getElementById('setup-pass').value;
     
-    if(!t || !p) {
-        alert("Please enter at least a Title and Password.");
-        return;
-    }
+    if(!t || !p) return alert("Please enter a Title and Password");
 
-    const data = { title: t, msg: m, pass: p };
-    // Robust encoding for special characters/emojis
-    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+    const dataObj = { title: t, msg: m, pass: p };
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(dataObj))));
     
-    // Build URL safely
-    const baseUrl = window.location.href.split('?')[0];
-    const finalUrl = baseUrl + '?d=' + encoded;
+    // Get clean URL without existing parameters
+    const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+    const finalUrl = cleanUrl + "?d=" + encoded;
     
-    const output = document.getElementById('link-output');
     const input = document.getElementById('share-url');
-    
     input.value = finalUrl;
-    output.classList.remove('hidden');
+    document.getElementById('link-output').classList.remove('hidden');
     
-    // Scroll to the link
-    input.scrollIntoView({ behavior: 'smooth' });
-}
-
-function copyLink() {
-    const copyText = document.getElementById("share-url");
-    copyText.select();
-    copyText.setSelectionRange(0, 99999); 
-    navigator.clipboard.writeText(copyText.value);
-    
-    const btn = document.getElementById('copy-btn');
-    btn.innerText = "Copied!";
-    setTimeout(() => btn.innerText = "Copy Link", 2000);
+    // Auto-copy to clipboard
+    input.select();
+    navigator.clipboard.writeText(finalUrl);
 }
 
 function startCelebration() {
-    document.getElementById('setup-screen').classList.remove('active');
+    // Hide setup, show landing
     document.getElementById('setup-screen').classList.add('hidden');
+    document.getElementById('setup-screen').classList.remove('active');
     
     document.getElementById('display-title').innerText = CONFIG.title;
     document.getElementById('display-msg').innerText = CONFIG.msg;
@@ -66,8 +55,9 @@ function startCelebration() {
     const bg = document.getElementById('landing-bg');
     bg.style.backgroundImage = "url('assets/photo1.jpg')";
     
-    document.getElementById('landing-screen').classList.remove('hidden');
-    document.getElementById('landing-screen').classList.add('active');
+    const landing = document.getElementById('landing-screen');
+    landing.classList.remove('hidden');
+    setTimeout(() => landing.classList.add('active'), 50);
 }
 
 function showPasswordGate() {
@@ -84,40 +74,41 @@ function checkPassword() {
     } else {
         input.parentElement.classList.add('shake');
         document.getElementById('error-msg').style.display = 'block';
-        setTimeout(() => input.parentElement.classList.remove('shake'), 400);
+        setTimeout(() => input.parentElement.classList.remove('shake'), 300);
     }
 }
 
 function switchScreen(oldId, newId) {
-    document.getElementById(oldId).classList.remove('active');
+    const oldS = document.getElementById(oldId);
+    const newS = document.getElementById(newId);
+    oldS.classList.remove('active');
     setTimeout(() => {
-        document.getElementById(oldId).classList.add('hidden');
-        document.getElementById(newId).classList.remove('hidden');
-        document.getElementById(newId).classList.add('active');
-    }, 500);
+        oldS.classList.add('hidden');
+        newS.classList.remove('hidden');
+        setTimeout(() => newS.classList.add('active'), 50);
+    }, 400);
 }
 
-// Slider
-let currentSlide = 0;
+// Slider Logic
+let curSlide = 0;
 function moveSlide(step) {
     const wrapper = document.getElementById('slider-wrapper');
-    currentSlide = (currentSlide + step + 3) % 3;
-    wrapper.style.transform = `translateX(-${currentSlide * 100}%)`;
+    curSlide = (curSlide + step + 3) % 3;
+    wrapper.style.transform = `translateX(-${curSlide * 100}%)`;
 }
 setInterval(() => moveSlide(1), 4000);
 
-// Game
+// Game Logic
 let score = 0;
 function initGame() {
     const target = document.getElementById('target');
+    const area = document.getElementById('game-area');
     const move = () => {
-        const area = document.getElementById('game-area');
         const x = Math.random() * (area.clientWidth - 50);
         const y = Math.random() * (area.clientHeight - 50);
         target.style.left = x + 'px';
         target.style.top = y + 'px';
     };
-    
     const hit = (e) => {
         e.preventDefault();
         score++;
@@ -125,14 +116,12 @@ function initGame() {
         if(score >= 10) document.getElementById('win-overlay').classList.remove('hidden');
         move();
     };
-
     target.addEventListener('touchstart', hit);
     target.addEventListener('click', hit);
-    setInterval(move, 1500);
+    setInterval(move, 1800);
 }
 
-function imgError(img) {
-    const parent = img.parentElement;
-    parent.style.background = "linear-gradient(45deg, #ff758f, #ffafbd)";
-    parent.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;font-size:50px">💝</div>';
+function imgErr(img) {
+    img.parentElement.style.background = "linear-gradient(45deg, #ff758f, #ffafbd)";
+    img.parentElement.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;font-size:40px">💝</div>';
 }
