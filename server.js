@@ -14,22 +14,45 @@ app.use(express.json({ limit: '15mb' }));
 const memorySurprises = new Map();
 
 // Endpoint for client to read Firebase configuration
-app.get('/api/firebase-config', (req, res) => {
-  res.json({
-    apiKey: process.env.FIREBASE_API_KEY || "AIzaSyDtt-uO_iihx2PywqM328Wc5Lw-qsnRK-4",
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN || "surprise-23c4a.firebaseapp.com",
-    projectId: process.env.FIREBASE_PROJECT_ID || "surprise-23c4a",
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "surprise-23c4a.firebasestorage.app",
-    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "140034132605",
-    appId: process.env.FIREBASE_APP_ID || "1:140034132605:web:38ebe5f7dbbb694323bf14"
-  });
+app.get('/api/firebase-config', async (req, res) => {
+  try {
+    const configPath = path.join(__dirname, 'firebase-applet-config.json');
+    const { promises: fs } = await import('fs');
+    try {
+      const data = await fs.readFile(configPath, 'utf8');
+      const parsed = JSON.parse(data);
+      return res.json(parsed);
+    } catch {
+      // No firebase config file exists, Firebase is disconnected
+      return res.json({});
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Fallback in-memory storage endpoints
+// Fallback in-memory storage endpoints with 12hr expiration & 10 clicks limit cleanup
 app.post('/api/surprises', (req, res) => {
   try {
     const id = 'mem_' + Math.random().toString(36).substring(2, 10);
-    memorySurprises.set(id, { ...req.body, id });
+    const now = Date.now();
+    const surpriseData = {
+      ...req.body,
+      id,
+      createdAt: req.body.createdAt || now,
+      expiresAt: req.body.expiresAt || (now + 12 * 60 * 60 * 1000),
+      maxClicks: typeof req.body.maxClicks === 'number' ? req.body.maxClicks : 10,
+      clickCount: 0
+    };
+    memorySurprises.set(id, surpriseData);
+
+    // Periodic cleanup of expired entries to avoid memory load
+    for (const [key, item] of memorySurprises.entries()) {
+      if (item.expiresAt && now > item.expiresAt) {
+        memorySurprises.delete(key);
+      }
+    }
+
     res.json({ id });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -39,8 +62,23 @@ app.post('/api/surprises', (req, res) => {
 app.get('/api/surprises/:id', (req, res) => {
   const data = memorySurprises.get(req.params.id);
   if (!data) {
-    return res.status(404).json({ error: 'Surprise not found' });
+    return res.status(404).json({ error: 'Surprise not found or has expired' });
   }
+
+  const now = Date.now();
+  if (data.expiresAt && now > data.expiresAt) {
+    memorySurprises.delete(req.params.id);
+    return res.status(410).json({ error: 'This surprise link has expired (12 hours limit reached).' });
+  }
+
+  // Increment click count
+  data.clickCount = (data.clickCount || 0) + 1;
+  const maxClicks = typeof data.maxClicks === 'number' ? data.maxClicks : 10;
+  if (data.clickCount > maxClicks) {
+    memorySurprises.delete(req.params.id);
+    return res.status(410).json({ error: 'This surprise link has reached its maximum view limit (10 clicks) and was cleared.' });
+  }
+
   res.json(data);
 });
 

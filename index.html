@@ -24,6 +24,11 @@
     <div class="seal">💌</div>
     <h1>Craft Her Surprise</h1>
     <p class="subtitle">Fill this in once — she gets the whole moment from one link.</p>
+    
+    <div id="cloudStatusBadge" class="cloud-status" aria-live="polite">
+      <span class="cloud-dot"></span>
+      <span id="cloudStatusText">Online</span>
+    </div>
 
     <form id="creatorForm" novalidate>
       <div class="field">
@@ -37,14 +42,30 @@
       </div>
 
       <div class="field">
+        <label for="customGreetingInput">Ending Greeting after game (optional)</label>
+        <input type="text" id="customGreetingInput" placeholder="Default: Every one of those hearts is really just... me, thinking about you.">
+      </div>
+
+      <div class="field">
         <label for="passwordInput">Secret passcode</label>
         <input type="password" id="passwordInput" placeholder="Something only she'd know" required>
       </div>
 
       <div class="field">
-        <label for="photoFiles">Three photos of you two</label>
+        <label for="photoFiles">Photos of you two (up to 3)</label>
         <input type="file" id="photoFiles" multiple accept="image/*" required>
         <div id="photoPreview" class="photo-preview" aria-live="polite"></div>
+      </div>
+
+      <div class="field">
+        <label for="bgFileInput">Win Screen Background Photo (optional)</label>
+        <input type="file" id="bgFileInput" accept="image/*">
+        <div id="bgPreview" class="photo-preview" aria-live="polite"></div>
+        <small class="field-hint">Displays as ambient backdrop when she completes the heart game</small>
+      </div>
+
+      <div class="field-meta-note">
+        <span class="lock-tag">⚡ Privacy & Security</span>: Link expires in 12 hours or after 10 clicks to keep data fresh and clean.
       </div>
 
       <button type="submit" id="generateBtn" class="btn-primary">Create the Link</button>
@@ -53,7 +74,11 @@
     <div id="linkResult" class="link-result hidden">
       <p class="success-line">Link ready — copied for you.</p>
       <textarea id="generatedUrl" rows="3" readonly></textarea>
-      <button id="copyBtn" type="button" class="btn-secondary">Copy Again</button>
+      <div class="result-actions">
+        <button id="copyBtn" type="button" class="btn-secondary">Copy Again</button>
+        <button id="openPreviewBtn" type="button" class="btn-secondary">Open Link</button>
+      </div>
+      <p class="link-expiry-notice">⏱️ Valid for 12 hours • Up to 10 clicks</p>
       <p id="sizeWarning" class="size-warning hidden"></p>
     </div>
   </div>
@@ -94,22 +119,31 @@
 
   <div class="game-panel">
     <h3>Catch the Hearts</h3>
-    <p class="game-sub">Tap 10 to unlock one more surprise — <span id="scoreDisplay">0</span>/10</p>
+    <p class="game-sub">Catch 5 hearts to unlock the celebration surprise — <span id="scoreDisplay">0</span>/5</p>
     <div id="gameArea">
       <div id="target">💗</div>
     </div>
+  </div>
+
+  <div class="restart-flow-container">
+    <button id="createAnotherBtn" type="button" class="btn-ghost">✨ Create Another Surprise</button>
   </div>
 </section>
 
 <!-- Win overlay -->
 <div id="winOverlay" class="overlay hidden">
+  <div id="winBgBackdrop" class="win-bg-backdrop"></div>
   <div id="confettiLayer" class="confetti-layer" aria-hidden="true"></div>
   <div class="win-card">
-    <h2>You caught them all 🎉</h2>
-    <p>Every one of those hearts is really just... me, thinking about you.</p>
+    <div class="win-badge">🎉</div>
+    <h2 id="winTitle">You caught them all!</h2>
+    <p id="winGreetingText">Every one of those hearts is really just... me, thinking about you.</p>
     <div class="win-actions">
       <button id="replayBtn" type="button" class="btn-secondary">Play Again</button>
-      <button id="closeOverlayBtn" type="button" class="btn-primary">Close</button>
+      <button id="closeOverlayBtn" type="button" class="btn-primary">View Photos</button>
+    </div>
+    <div class="win-footer">
+      <button id="winCreateBtn" type="button" class="btn-link">Create Your Own Surprise Link</button>
     </div>
   </div>
 </div>
@@ -117,19 +151,14 @@
 <!-- Firebase (dynamic configuration from environment / server) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-  import { getFirestore, collection, addDoc, doc, getDoc }
+  import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, increment }
     from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 
   window.__firebasePromise = (async () => {
     try {
-      let config = {
-        apiKey: "AIzaSyDtt-uO_iihx2PywqM328Wc5Lw-qsnRK-4",
-        authDomain: "surprise-23c4a.firebaseapp.com",
-        projectId: "surprise-23c4a",
-        storageBucket: "surprise-23c4a.firebasestorage.app",
-        messagingSenderId: "140034132605",
-        appId: "1:140034132605:web:38ebe5f7dbbb694323bf14"
-      };
+      let config = null;
 
       try {
         const res = await fetch('/api/firebase-config');
@@ -140,14 +169,39 @@
           }
         }
       } catch (e) {
-        console.warn("Could not load /api/firebase-config, using default config", e);
+        console.warn("Could not load /api/firebase-config", e);
       }
 
+      if (!config) {
+        window.__db = null;
+        window.__auth = null;
+        window.dispatchEvent(new CustomEvent("firebase-ready", { detail: { ready: false, disconnected: true } }));
+        return;
+      }
+
+      window.__firebaseConfig = config;
       const app = initializeApp(config);
-      window.__db = getFirestore(app);
-      window.__fs = { collection, addDoc, doc, getDoc };
+      const db = config.firestoreDatabaseId && config.firestoreDatabaseId !== "(default)"
+        ? getFirestore(app, config.firestoreDatabaseId)
+        : getFirestore(app);
+      const auth = getAuth(app);
+
+      window.__db = db;
+      window.__auth = auth;
+      window.__fs = { collection, addDoc, doc, getDoc, updateDoc, increment };
+      window.__authModule = { signInAnonymously, onAuthStateChanged };
+
+      // Authenticate session seamlessly
+      try {
+        await signInAnonymously(auth);
+      } catch (authErr) {
+        console.warn("Anonymous auth info:", authErr.message || authErr);
+      }
+
+      window.dispatchEvent(new CustomEvent("firebase-ready", { detail: { ready: true, projectId: config.projectId } }));
     } catch (err) {
       console.warn("Firebase initialization warning:", err);
+      window.dispatchEvent(new CustomEvent("firebase-ready", { detail: { ready: false, error: err } }));
     }
   })();
 </script>

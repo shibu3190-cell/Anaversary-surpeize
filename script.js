@@ -1,22 +1,26 @@
 let CONFIG = {
   title: "",
   message: "",
+  customGreeting: "",
+  bgImage: null,
   password: "",
-  photos: []
+  photos: [],
+  expiresAt: null,
+  maxClicks: 10,
+  clickCount: 0
 };
 
 let score = 0;
-const targetScore = 10;
+const targetScore = 5; // Updated: exactly 5 times to catch heart
 let sliderInterval = null;
 let heartsTimer = null;
+let targetDriftTimer = null;
 
-/* ---------------- Image compression (with proper error handling) ---------------- */
-// BUG FIX: original version never rejected the promise on file-read or image-load
-// failure, so a bad file left the "Processing photos..." button stuck forever.
-function resizeImage(file, maxWidth = 800, quality = 0.72) {
+/* ---------------- Image compression (robust across iOS & desktop) ---------------- */
+async function resizeImage(file, maxWidth = 800, quality = 0.70) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Couldn't read that photo. Try a different file."));
+    reader.onerror = () => reject(new Error("Couldn't read that photo. Please try a different file."));
     reader.onload = (e) => {
       const img = new Image();
       img.onerror = () => reject(new Error("That file doesn't look like a valid image."));
@@ -33,7 +37,18 @@ function resizeImage(file, maxWidth = 800, quality = 0.72) {
           canvas.height = height;
           const ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL("image/jpeg", quality));
+
+          let result = canvas.toDataURL("image/jpeg", quality);
+          // If still large, scale down further to guarantee safety inside document limits
+          if (result.length > 200000) {
+            const smallerCanvas = document.createElement("canvas");
+            smallerCanvas.width = Math.round(width * 0.7);
+            smallerCanvas.height = Math.round(height * 0.7);
+            const sCtx = smallerCanvas.getContext("2d");
+            sCtx.drawImage(img, 0, 0, smallerCanvas.width, smallerCanvas.height);
+            result = smallerCanvas.toDataURL("image/jpeg", 0.60);
+          }
+          resolve(result);
         } catch (err) {
           reject(err);
         }
@@ -75,13 +90,39 @@ document.addEventListener("DOMContentLoaded", async () => {
       let loaded = false;
       if (window.__fs && window.__db) {
         try {
-          const { doc, getDoc } = window.__fs;
-          const snap = await getDoc(doc(window.__db, "surprises", id));
+          const { doc, getDoc, updateDoc, increment } = window.__fs;
+          const docRef = doc(window.__db, "surprises", id);
+          const snap = await getDoc(docRef);
           if (snap.exists()) {
             CONFIG = snap.data();
             loaded = true;
+
+            // Check link expiration: 12 hours limit
+            const now = Date.now();
+            if (CONFIG.expiresAt && now > CONFIG.expiresAt) {
+              throw new Error("This surprise link has expired (12 hours limit reached).");
+            }
+
+            // Check click limit: 10 views maximum
+            const currentClicks = (CONFIG.clickCount || 0) + 1;
+            const maxClicks = typeof CONFIG.maxClicks === "number" ? CONFIG.maxClicks : 10;
+            if (currentClicks > maxClicks) {
+              throw new Error("This surprise link has reached its maximum view limit (10 clicks).");
+            }
+
+            // Record click counter asynchronously in Firestore
+            try {
+              if (updateDoc && increment) {
+                updateDoc(docRef, { clickCount: increment(1) }).catch(() => {});
+              }
+            } catch (err) {
+              console.warn("Could not increment clickCount:", err);
+            }
           }
         } catch (fsErr) {
+          if (fsErr.message && (fsErr.message.includes("expired") || fsErr.message.includes("maximum view limit"))) {
+            throw fsErr;
+          }
           console.warn("Firestore fetch error, attempting server fallback:", fsErr);
         }
       }
@@ -91,11 +132,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (res.ok) {
           CONFIG = await res.json();
           loaded = true;
+        } else if (res.status === 410) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.error || "This surprise link has expired.");
         }
       }
 
       if (!loaded || !CONFIG.title || !CONFIG.password) {
-        throw new Error("No surprise found for this link.");
+        throw new Error("No surprise found or this link has expired.");
       }
 
       document.getElementById("gateScreen").classList.remove("hidden");
@@ -103,8 +147,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (error) {
       console.error("Link Data Error", error);
       document.body.innerHTML = `
-        <div style="display:flex;height:100vh;justify-content:center;align-items:center;text-align:center;font-family:sans-serif;padding:20px;">
-          <h2>This link seems broken — please ask for a new one</h2>
+        <div style="display:flex;flex-direction:column;min-height:100vh;justify-content:center;align-items:center;text-align:center;font-family:sans-serif;padding:24px;background:#fff5f7;">
+          <div style="font-size:42px;margin-bottom:12px;">⏳</div>
+          <h2 style="color:#7a2142;margin:0 0 10px;font-family:Playfair Display, serif;">Link No Longer Available</h2>
+          <p style="color:#664052;max-width:320px;line-height:1.5;margin-bottom:20px;">
+            ${error.message || "This link seems broken or reached its 12-hour / 10-clicks privacy limit."}
+          </p>
+          <a href="${window.location.pathname}" style="display:inline-block;padding:12px 24px;border-radius:999px;background:#7a2142;color:#fff;text-decoration:none;font-weight:700;font-size:14px;">Create a New Surprise</a>
         </div>
       `;
     }
@@ -118,10 +167,31 @@ function setupCreator() {
   const form = document.getElementById("creatorForm");
   const generateBtn = document.getElementById("generateBtn");
   const fileInput = document.getElementById("photoFiles");
+  const bgFileInput = document.getElementById("bgFileInput");
   const preview = document.getElementById("photoPreview");
+  const bgPreview = document.getElementById("bgPreview");
+  const statusBadge = document.getElementById("cloudStatusBadge");
+  const statusText = document.getElementById("cloudStatusText");
+  const statusDot = statusBadge ? statusBadge.querySelector(".cloud-dot") : null;
 
-  // Instant local thumbnail preview (separate from the compression pipeline
-  // used at submit time, so picking photos feels responsive).
+  // Clean, unified status display: "Online"
+  const updateCloudStatus = () => {
+    if (!statusText || !statusDot) return;
+    statusDot.className = "cloud-dot connected";
+    statusText.textContent = "Online";
+  };
+
+  updateCloudStatus();
+  window.addEventListener("firebase-ready", updateCloudStatus);
+  if (window.__auth && window.__authModule) {
+    try {
+      window.__authModule.onAuthStateChanged(window.__auth, updateCloudStatus);
+    } catch (e) {
+      console.warn("Auth state watch:", e);
+    }
+  }
+
+  // Instant local thumbnail preview for photos
   fileInput.addEventListener("change", (e) => {
     preview.innerHTML = "";
     Array.from(e.target.files).slice(0, 3).forEach((file) => {
@@ -133,13 +203,28 @@ function setupCreator() {
     });
   });
 
+  // Preview for optional background image
+  if (bgFileInput && bgPreview) {
+    bgFileInput.addEventListener("change", (e) => {
+      bgPreview.innerHTML = "";
+      const file = e.target.files && e.target.files[0];
+      if (file) {
+        const url = URL.createObjectURL(file);
+        const img = document.createElement("img");
+        img.src = url;
+        img.onload = () => URL.revokeObjectURL(url);
+        bgPreview.appendChild(img);
+      }
+    });
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const files = fileInput.files;
     const password = document.getElementById("passwordInput").value.trim();
 
-    if (files.length < 3) {
-      notifyUser("Please select at least 3 photos.");
+    if (files.length < 1) {
+      notifyUser("Please select at least 1 photo (up to 3 photos).");
       return;
     }
     if (!password) {
@@ -152,23 +237,45 @@ function setupCreator() {
 
     try {
       const photos = [];
-      for (let i = 0; i < 3; i++) {
+      const count = Math.min(files.length, 3);
+      for (let i = 0; i < count; i++) {
         const compressed = await resizeImage(files[i]);
         photos.push(compressed);
       }
 
+      // If user uploaded 1 or 2, duplicate for a smooth 3-slide visual carousel
+      while (photos.length < 3) {
+        photos.push(photos[0]);
+      }
+
+      // Process optional background image for game completion
+      let bgImage = null;
+      if (bgFileInput && bgFileInput.files && bgFileInput.files[0]) {
+        generateBtn.innerText = "Processing background...";
+        bgImage = await resizeImage(bgFileInput.files[0], 900, 0.65);
+      }
+
+      const customGreeting = (document.getElementById("customGreetingInput")?.value || "").trim();
+      const now = Date.now();
+
       const data = {
         title: document.getElementById("titleInput").value.trim(),
         message: document.getElementById("messageInput").value.trim(),
+        customGreeting: customGreeting || "Every one of those hearts is really just... me, thinking about you.",
+        bgImage: bgImage || null,
         password: password,
         photos: photos,
-        createdAt: Date.now()
+        createdAt: now,
+        expiresAt: now + (12 * 60 * 60 * 1000), // Valid for 12 hours
+        maxClicks: 10,                         // Valid for 10 clicks maximum
+        clickCount: 0,
+        creatorUid: (window.__auth && window.__auth.currentUser) ? window.__auth.currentUser.uid : null
       };
 
       // Check approx payload size
       const approxSize = JSON.stringify(data).length;
-      if (approxSize > 900000) {
-        throw new Error("These photos are too large even for Firestore's 1MB limit — please choose smaller photos.");
+      if (approxSize > 920000) {
+        throw new Error("Photos are slightly too large for cloud storage — please choose smaller files.");
       }
 
       generateBtn.innerText = "Saving...";
@@ -206,7 +313,12 @@ function setupCreator() {
       document.getElementById("linkResult").classList.remove("hidden");
       urlBox.select();
       if (navigator.clipboard) navigator.clipboard.writeText(finalUrl).catch(() => {});
-      document.getElementById("sizeWarning").classList.add("hidden"); // link itself is always short now
+      document.getElementById("sizeWarning").classList.add("hidden");
+
+      const openPreviewBtn = document.getElementById("openPreviewBtn");
+      if (openPreviewBtn) {
+        openPreviewBtn.onclick = () => window.open(finalUrl, "_blank");
+      }
     } catch (err) {
       notifyUser("Error: " + err.message);
     } finally {
@@ -279,6 +391,14 @@ function startCelebration() {
     document.getElementById("slide3").src = CONFIG.photos[2];
   }
 
+  // Setup "Create Another" flow button
+  const createAnotherBtn = document.getElementById("createAnotherBtn");
+  if (createAnotherBtn) {
+    createAnotherBtn.onclick = () => {
+      window.location.href = window.location.pathname;
+    };
+  }
+
   initSlider();
   startAmbientHearts();
 
@@ -314,7 +434,7 @@ function initSlider() {
   resetTimer();
 }
 
-/* ---------------- Mini game ---------------- */
+/* ---------------- Mini game (Gentle Drifting, 5 Hearts Target) ---------------- */
 function initGame() {
   const target = document.getElementById("target");
   const gameArea = document.getElementById("gameArea");
@@ -322,25 +442,47 @@ function initGame() {
   const winOverlay = document.getElementById("winOverlay");
   const closeOverlayBtn = document.getElementById("closeOverlayBtn");
   const replayBtn = document.getElementById("replayBtn");
+  const winGreetingText = document.getElementById("winGreetingText");
+  const winBgBackdrop = document.getElementById("winBgBackdrop");
+  const winCreateBtn = document.getElementById("winCreateBtn");
 
   score = 0;
   scoreDisplay.innerText = "0";
-  target.style.display = "block";
+  target.style.display = "flex";
+
+  if (targetDriftTimer) {
+    clearInterval(targetDriftTimer);
+    targetDriftTimer = null;
+  }
 
   function moveTarget() {
     const areaW = gameArea.clientWidth || 300;
-    const areaH = gameArea.clientHeight || 220;
-    const maxX = Math.max(areaW - 50, 40);
-    const maxY = Math.max(areaH - 50, 40);
+    const areaH = gameArea.clientHeight || 230;
+    const maxX = Math.max(areaW - 60, 30);
+    const maxY = Math.max(areaH - 60, 30);
     const randX = Math.floor(Math.random() * maxX) + 15;
     const randY = Math.floor(Math.random() * maxY) + 15;
     target.style.left = `${randX}px`;
     target.style.top = `${randY}px`;
   }
 
-  // BUG FIX (previous prototype): binding both 'touchstart' and 'click' to the
-  // same handler double-counted every tap on touch devices. onpointerdown
-  // fires exactly once per interaction across mouse, touch, and pen.
+  // Gentle subtle continuous drift every 1.8 seconds so touches can miss if not timed well, but not frustratingly fast
+  targetDriftTimer = setInterval(() => {
+    if (score < targetScore) {
+      const areaW = gameArea.clientWidth || 300;
+      const areaH = gameArea.clientHeight || 230;
+      const currentX = parseFloat(target.style.left) || 40;
+      const currentY = parseFloat(target.style.top) || 40;
+      // Gentle shift of 25-50px in random direction
+      const deltaX = (Math.random() * 60 - 30);
+      const deltaY = (Math.random() * 50 - 25);
+      const newX = Math.min(Math.max(currentX + deltaX, 15), Math.max(areaW - 60, 20));
+      const newY = Math.min(Math.max(currentY + deltaY, 15), Math.max(areaH - 60, 20));
+      target.style.left = `${newX}px`;
+      target.style.top = `${newY}px`;
+    }
+  }, 1800);
+
   function hit(e) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
     score++;
@@ -348,8 +490,31 @@ function initGame() {
     showScorePop(parseFloat(target.style.left) || 0, parseFloat(target.style.top) || 0, gameArea);
 
     if (score >= targetScore) {
+      if (targetDriftTimer) {
+        clearInterval(targetDriftTimer);
+        targetDriftTimer = null;
+      }
       target.style.display = "none";
+
+      // Configure customized greeting or fallback
+      const greeting = CONFIG.customGreeting || "Every one of those hearts is really just... me, thinking about you.";
+      if (winGreetingText) {
+        winGreetingText.innerText = greeting;
+      }
+
+      // Configure customized background image if provided
+      if (winBgBackdrop) {
+        if (CONFIG.bgImage) {
+          winBgBackdrop.style.backgroundImage = `url("${CONFIG.bgImage}")`;
+          winBgBackdrop.classList.add("has-bg");
+        } else {
+          winBgBackdrop.style.backgroundImage = "none";
+          winBgBackdrop.classList.remove("has-bg");
+        }
+      }
+
       launchConfetti();
+      burstHearts(12);
       winOverlay.classList.remove("hidden");
     } else {
       moveTarget();
@@ -357,11 +522,18 @@ function initGame() {
   }
 
   target.onpointerdown = hit;
+
   closeOverlayBtn.onclick = () => winOverlay.classList.add("hidden");
   replayBtn.onclick = () => {
     winOverlay.classList.add("hidden");
     initGame();
   };
+
+  if (winCreateBtn) {
+    winCreateBtn.onclick = () => {
+      window.location.href = window.location.pathname;
+    };
+  }
 
   moveTarget();
 }

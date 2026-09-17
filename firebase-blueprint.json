@@ -1,0 +1,33 @@
+{
+  "entities": {
+    "Surprise": {
+      "title": "Surprise",
+      "description": "A celebration surprise containing occasion title, message, secret passcode, and compressed photos",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 2000 },
+        "customGreeting": { "type": "string", "maxLength": 500 },
+        "bgImage": { "type": "string" },
+        "password": { "type": "string", "maxLength": 100 },
+        "photos": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 5
+        },
+        "createdAt": { "type": "number" },
+        "expiresAt": { "type": "number" },
+        "maxClicks": { "type": "number" },
+        "clickCount": { "type": "number" },
+        "creatorUid": { "type": "string" }
+      },
+      "required": ["title", "password", "photos", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/surprises/{surpriseId}": {
+      "entity": "Surprise",
+      "description": "Collection of celebration surprises accessible by direct ID link"
+    }
+  }
+}

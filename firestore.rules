@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidId(id) {
+      return id is string && id.matches('^[a-zA-Z0-9_\\-]+$') && id.size() > 0 && id.size() <= 64;
+    }
+
+    function isValidSurprise(data) {
+      return data.keys().hasAll(['title', 'password', 'photos', 'createdAt'])
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 200
+        && (!('message' in data) || (data.message is string && data.message.size() <= 2000))
+        && (!('customGreeting' in data) || (data.customGreeting is string && data.customGreeting.size() <= 500))
+        && (!('bgImage' in data) || (data.bgImage is string && data.bgImage.size() <= 600000) || data.bgImage == null)
+        && data.password is string && data.password.size() > 0 && data.password.size() <= 100
+        && data.photos is list && data.photos.size() >= 1 && data.photos.size() <= 5
+        && data.photos[0] is string
+        && data.createdAt is number
+        && (!('expiresAt' in data) || data.expiresAt is number)
+        && (!('maxClicks' in data) || data.maxClicks is number)
+        && (!('clickCount' in data) || data.clickCount is number)
+        && (!('creatorUid' in data) || data.creatorUid is string || data.creatorUid == null);
+    }
+
+    match /surprises/{surpriseId} {
+      allow get: if isValidId(surpriseId);
+      allow create: if isValidId(surpriseId) && isValidSurprise(request.resource.data);
+      allow update: if isValidId(surpriseId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clickCount']);
+      allow list: if false;
+      allow delete: if false;
+    }
+  }
+}
