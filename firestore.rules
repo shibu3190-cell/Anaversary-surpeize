@@ -11,7 +11,7 @@ service cloud.firestore {
         && data.title is string && data.title.size() > 0 && data.title.size() <= 200
         && (!('message' in data) || (data.message is string && data.message.size() <= 2000))
         && (!('customGreeting' in data) || (data.customGreeting is string && data.customGreeting.size() <= 500))
-        && (!('bgImage' in data) || (data.bgImage is string && data.bgImage.size() <= 600000) || data.bgImage == null)
+        && (!('bgImage' in data) || data.bgImage is string || data.bgImage == null)
         && data.password is string && data.password.size() > 0 && data.password.size() <= 100
         && data.photos is list && data.photos.size() >= 1 && data.photos.size() <= 5
         && data.photos[0] is string

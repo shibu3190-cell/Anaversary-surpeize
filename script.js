@@ -17,7 +17,7 @@ let heartsTimer = null;
 let targetDriftTimer = null;
 
 /* ---------------- Image compression (robust across iOS & desktop) ---------------- */
-async function resizeImage(file, maxWidth = 800, quality = 0.70) {
+async function resizeImage(file, maxWidth = 640, quality = 0.65) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Couldn't read that photo. Please try a different file."));
@@ -39,14 +39,14 @@ async function resizeImage(file, maxWidth = 800, quality = 0.70) {
           ctx.drawImage(img, 0, 0, width, height);
 
           let result = canvas.toDataURL("image/jpeg", quality);
-          // If still large, scale down further to guarantee safety inside document limits
-          if (result.length > 200000) {
+          // If still larger than 140KB, scale down further to guarantee safety inside 1MB document limit with 3+ photos
+          if (result.length > 140000) {
             const smallerCanvas = document.createElement("canvas");
             smallerCanvas.width = Math.round(width * 0.7);
             smallerCanvas.height = Math.round(height * 0.7);
             const sCtx = smallerCanvas.getContext("2d");
             sCtx.drawImage(img, 0, 0, smallerCanvas.width, smallerCanvas.height);
-            result = smallerCanvas.toDataURL("image/jpeg", 0.60);
+            result = smallerCanvas.toDataURL("image/jpeg", 0.55);
           }
           resolve(result);
         } catch (err) {
@@ -60,15 +60,16 @@ async function resizeImage(file, maxWidth = 800, quality = 0.70) {
 }
 
 function notifyUser(msg) {
+  const alertBox = document.getElementById("creatorErrorAlert");
+  if (alertBox) {
+    alertBox.textContent = msg;
+    alertBox.classList.remove("hidden");
+    alertBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
   const warningEl = document.getElementById("sizeWarning");
   if (warningEl) {
     warningEl.textContent = msg;
     warningEl.classList.remove("hidden");
-  }
-  try {
-    alert(msg);
-  } catch (e) {
-    console.warn("Alert blocked:", msg);
   }
 }
 
@@ -220,6 +221,9 @@ function setupCreator() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    const alertBox = document.getElementById("creatorErrorAlert");
+    if (alertBox) alertBox.classList.add("hidden");
+
     const files = fileInput.files;
     const password = document.getElementById("passwordInput").value.trim();
 
@@ -252,7 +256,7 @@ function setupCreator() {
       let bgImage = null;
       if (bgFileInput && bgFileInput.files && bgFileInput.files[0]) {
         generateBtn.innerText = "Processing background...";
-        bgImage = await resizeImage(bgFileInput.files[0], 900, 0.65);
+        bgImage = await resizeImage(bgFileInput.files[0], 700, 0.60);
       }
 
       const customGreeting = (document.getElementById("customGreetingInput")?.value || "").trim();
@@ -281,6 +285,8 @@ function setupCreator() {
       generateBtn.innerText = "Saving...";
 
       let savedId = null;
+      let lastSaveError = null;
+
       if (window.__fs && window.__db) {
         try {
           const { collection, addDoc } = window.__fs;
@@ -289,21 +295,29 @@ function setupCreator() {
             savedId = ref.id;
           }
         } catch (fsErr) {
+          lastSaveError = fsErr;
           console.warn("Firestore save failed, falling back to local server storage:", fsErr);
         }
       }
 
       if (!savedId) {
-        const res = await fetch('/api/surprises', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-        if (!res.ok) {
-          throw new Error("Could not save surprise. Please check your connection and try again.");
+        try {
+          const res = await fetch('/api/surprises', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          if (res.ok) {
+            const json = await res.json();
+            savedId = json.id;
+          } else {
+            const errBody = await res.json().catch(() => ({}));
+            throw new Error(errBody.error || `Server responded with status ${res.status}`);
+          }
+        } catch (apiErr) {
+          console.error("API save failed:", apiErr);
+          throw new Error(lastSaveError ? `Cloud error (${lastSaveError.message || lastSaveError.code}). Please try with slightly smaller photos.` : "Could not save surprise. Please check your connection and try again.");
         }
-        const json = await res.json();
-        savedId = json.id;
       }
 
       const finalUrl = window.location.origin + window.location.pathname + "?id=" + savedId;
