@@ -135,11 +135,12 @@ app.put('/api/surprises/:id', (req, res) => {
     return res.status(404).json({ error: 'Surprise not found or has expired' });
   }
 
-  const { title, message, customGreeting, password } = req.body;
+  const { title, message, customGreeting, password, voiceNote } = req.body;
   if (title) existing.title = title;
   if (typeof message === 'string') existing.message = message;
   if (typeof customGreeting === 'string') existing.customGreeting = customGreeting;
   if (password) existing.password = password;
+  if (voiceNote !== undefined) existing.voiceNote = voiceNote;
 
   memorySurprises.set(req.params.id, existing);
   res.json({ success: true, surprise: existing });

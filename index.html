@@ -35,14 +35,14 @@
 <!-- Screen 1: Creator (only you ever see this) -->
 <section id="creatorScreen" class="screen creator-screen">
   <div class="stationery">
-    <div class="seal">💌</div>
-    <h1>Craft a Surprise</h1>
-    <p class="subtitle">Fill this in once — they get the whole moment from one private link.</p>
-    
-    <div id="cloudStatusBadge" class="cloud-status" aria-live="polite">
+    <div id="cloudStatusBadge" class="cloud-status top-right" aria-live="polite">
       <span class="cloud-dot"></span>
       <span id="cloudStatusText">Online</span>
     </div>
+
+    <div class="seal">💌</div>
+    <h1>Craft a Surprise</h1>
+    <p class="subtitle">Fill this in once — they get the whole moment from one private link.</p>
 
     <!-- Switcher between Create New & Manage Existing Link -->
     <div class="creator-mode-tabs" role="tablist">
@@ -61,6 +61,40 @@
         <div class="field">
           <label for="messageInput">Your message (optional)</label>
           <textarea id="messageInput" rows="3" placeholder="Write what you'd say if they were right here..."></textarea>
+        </div>
+
+        <!-- Voice Note Recording or Uploading Section -->
+        <div class="field voice-note-field">
+          <label>Voice Message (optional)</label>
+          <div class="voice-tabs" role="tablist">
+            <button type="button" id="tabVoiceRecord" class="voice-tab active" role="tab" aria-selected="true">🎙️ Record Voice</button>
+            <button type="button" id="tabVoiceUpload" class="voice-tab" role="tab" aria-selected="false">📁 Upload Audio</button>
+          </div>
+
+          <!-- Record Mode -->
+          <div id="voiceRecordPanel" class="voice-panel">
+            <div class="voice-record-controls">
+              <button type="button" id="recordVoiceBtn" class="btn-voice-record">
+                <span class="record-dot"></span>
+                <span id="recordVoiceBtnText">Tap to Record</span>
+              </button>
+              <div id="recordingTimer" class="recording-timer hidden">0:00</div>
+            </div>
+            <p class="field-hint">Record up to 60 seconds. Plays automatically when they open your letter.</p>
+          </div>
+
+          <!-- Upload Mode -->
+          <div id="voiceUploadPanel" class="voice-panel hidden">
+            <input type="file" id="voiceFileInput" accept="audio/*">
+            <p class="field-hint">Upload an audio recording (mp3, wav, m4a, ogg - max 2MB).</p>
+          </div>
+
+          <!-- Audio Preview & Playback for Creator -->
+          <div id="creatorAudioPreview" class="audio-preview-row hidden">
+            <button type="button" id="previewVoicePlayBtn" class="btn-audio-mini" title="Preview recording">▶ Play</button>
+            <span id="previewAudioDuration" class="audio-time-label">0:00</span>
+            <button type="button" id="deleteVoiceBtn" class="btn-audio-remove" title="Remove voice message">✕ Remove</button>
+          </div>
         </div>
 
         <div class="field">
@@ -254,6 +288,30 @@
           <span aria-hidden="true">&times;</span>
         </button>
         <div class="letter-stamp">❤️</div>
+        
+        <!-- Voice Note Player Banner (Visible if surprise has voice note) -->
+        <div id="letterVoicePlayer" class="letter-voice-player hidden">
+          <div class="voice-player-main">
+            <div class="voice-waveform-icon">
+              <span class="v-wave"></span><span class="v-wave"></span><span class="v-wave"></span><span class="v-wave"></span>
+            </div>
+            <div class="voice-player-info">
+              <span class="voice-player-title">Voice Note</span>
+              <span id="voicePlayProgress" class="voice-player-time">0:00 / 0:00</span>
+            </div>
+          </div>
+          <div class="voice-player-controls">
+            <button type="button" id="replayVoiceBtn" class="btn-voice-ctrl" title="Replay voice note" aria-label="Replay voice note">
+              <span class="ctrl-icon">🔄</span>
+              <span class="ctrl-label">Replay</span>
+            </button>
+            <button type="button" id="muteVoiceBtn" class="btn-voice-ctrl" title="Mute/Unmute voice note" aria-label="Mute voice note">
+              <span id="muteVoiceIcon" class="ctrl-icon">🔊</span>
+              <span id="muteVoiceLabel" class="ctrl-label">Mute</span>
+            </button>
+          </div>
+        </div>
+
         <div class="letter-scroll-body">
           <p id="displayMessage" class="letter-body-text"></p>
         </div>

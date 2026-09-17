@@ -1,6 +1,7 @@
 let CONFIG = {
   title: "",
   message: "",
+  voiceNote: null, // base64 data URL for recorded/uploaded voice note
   customGreeting: "",
   bgImage: null,
   password: "",
@@ -22,7 +23,14 @@ let isAudioMuted = false;
 let bgMusicInterval = null;
 let bgMusicStep = 0;
 let masterGain = null;
+let musicGain = null; // Separate gain to duck background music when voice plays
 let isMusicPlaying = false;
+
+/* Voice Note Playback State */
+let activeVoiceAudio = null;
+let isVoiceMuted = false;
+let isVoicePlaying = false;
+let isMusicDucked = false;
 
 function getAudioContext() {
   if (!audioCtx) {
@@ -32,6 +40,10 @@ function getAudioContext() {
       masterGain = audioCtx.createGain();
       masterGain.gain.setValueAtTime(0.35, audioCtx.currentTime);
       masterGain.connect(audioCtx.destination);
+
+      musicGain = audioCtx.createGain();
+      musicGain.gain.setValueAtTime(1.0, audioCtx.currentTime);
+      musicGain.connect(masterGain);
     }
   }
   if (audioCtx && audioCtx.state === "suspended") {
@@ -40,8 +52,19 @@ function getAudioContext() {
   return audioCtx;
 }
 
+// Lowers background music volume when voice note is speaking (audio ducking)
+function duckBackgroundMusic(duck = true) {
+  isMusicDucked = duck;
+  const ctx = getAudioContext();
+  if (!ctx || !musicGain) return;
+  const now = ctx.currentTime;
+  const targetVal = duck ? 0.22 : 1.0; // Reduce music to 22% volume so voice is clearly heard
+  musicGain.gain.cancelScheduledValues(now);
+  musicGain.gain.linearRampToValueAtTime(targetVal, now + 0.5);
+}
+
 // Gentle celesta/music box chime note
-function playTone(freq, duration = 0.5, type = "sine", gainLevel = 0.25, timeOffset = 0) {
+function playTone(freq, duration = 0.5, type = "sine", gainLevel = 0.25, timeOffset = 0, isMelody = false) {
   const ctx = getAudioContext();
   if (!ctx || isAudioMuted) return;
 
@@ -58,7 +81,11 @@ function playTone(freq, duration = 0.5, type = "sine", gainLevel = 0.25, timeOff
   noteGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
   osc.connect(noteGain);
-  noteGain.connect(masterGain || ctx.destination);
+  if (isMelody && musicGain) {
+    noteGain.connect(musicGain);
+  } else {
+    noteGain.connect(masterGain || ctx.destination);
+  }
 
   osc.start(startTime);
   osc.stop(startTime + duration + 0.05);
@@ -139,7 +166,7 @@ function startRomanticMelody() {
     const currentChord = arpeggios[bgMusicStep];
     const freq = currentChord[noteIndex];
 
-    playTone(freq, 0.48, "sine", 0.08, 0);
+    playTone(freq, 0.48, "sine", 0.08, 0, true);
 
     noteIndex++;
     if (noteIndex >= currentChord.length) {
@@ -182,6 +209,110 @@ function updateMusicToggleUI() {
     btn.setAttribute("title", "Pause music");
     btn.setAttribute("aria-label", "Pause music");
   }
+}
+
+/* ---------------- Voice Note Playback & Ducking Engine ---------------- */
+function initVoicePlayerForLetter() {
+  const player = document.getElementById("letterVoicePlayer");
+  const replayBtn = document.getElementById("replayVoiceBtn");
+  const muteBtn = document.getElementById("muteVoiceBtn");
+  const muteIcon = document.getElementById("muteVoiceIcon");
+  const muteLabel = document.getElementById("muteVoiceLabel");
+  const progressLabel = document.getElementById("voicePlayProgress");
+
+  if (!CONFIG.voiceNote) {
+    if (player) player.classList.add("hidden");
+    return;
+  }
+
+  if (player) player.classList.remove("hidden");
+
+  // Create or reset Audio element
+  if (activeVoiceAudio) {
+    activeVoiceAudio.pause();
+    activeVoiceAudio = null;
+  }
+
+  activeVoiceAudio = new Audio(CONFIG.voiceNote);
+  activeVoiceAudio.preload = "auto";
+  isVoiceMuted = false;
+  activeVoiceAudio.muted = false;
+
+  const formatSecs = (sec) => {
+    if (isNaN(sec) || !isFinite(sec)) return "0:00";
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  activeVoiceAudio.addEventListener("loadedmetadata", () => {
+    if (progressLabel) {
+      progressLabel.textContent = `0:00 / ${formatSecs(activeVoiceAudio.duration)}`;
+    }
+  });
+
+  activeVoiceAudio.addEventListener("timeupdate", () => {
+    if (progressLabel && activeVoiceAudio) {
+      const cur = formatSecs(activeVoiceAudio.currentTime);
+      const dur = formatSecs(activeVoiceAudio.duration);
+      progressLabel.textContent = `${cur} / ${dur}`;
+    }
+  });
+
+  activeVoiceAudio.addEventListener("play", () => {
+    isVoicePlaying = true;
+    if (player) player.classList.add("playing");
+    // Duck the background music so the voice is clearly heard
+    duckBackgroundMusic(true);
+  });
+
+  activeVoiceAudio.addEventListener("pause", () => {
+    isVoicePlaying = false;
+    if (player) player.classList.remove("playing");
+    // Restore background music
+    duckBackgroundMusic(false);
+  });
+
+  activeVoiceAudio.addEventListener("ended", () => {
+    isVoicePlaying = false;
+    if (player) player.classList.remove("playing");
+    duckBackgroundMusic(false);
+    if (progressLabel) {
+      progressLabel.textContent = `Ended / ${formatSecs(activeVoiceAudio.duration)}`;
+    }
+  });
+
+  // Replay button
+  if (replayBtn) {
+    replayBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (!activeVoiceAudio) return;
+      activeVoiceAudio.currentTime = 0;
+      activeVoiceAudio.muted = isVoiceMuted;
+      activeVoiceAudio.play().catch(err => console.warn("Audio play blocked:", err));
+    };
+  }
+
+  // Mute / Unmute button
+  if (muteBtn) {
+    muteBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (!activeVoiceAudio) return;
+      isVoiceMuted = !isVoiceMuted;
+      activeVoiceAudio.muted = isVoiceMuted;
+      if (muteIcon) muteIcon.textContent = isVoiceMuted ? "🔇" : "🔊";
+      if (muteLabel) muteLabel.textContent = isVoiceMuted ? "Unmute" : "Mute";
+    };
+  }
+
+  // Play immediately when letter is opened
+  setTimeout(() => {
+    if (activeVoiceAudio) {
+      activeVoiceAudio.play().catch((err) => {
+        console.warn("Auto-playback awaiting user interaction:", err);
+      });
+    }
+  }, 350);
 }
 
 /* ---------------- Image compression (robust across iOS & desktop) ---------------- */
@@ -439,6 +570,180 @@ function setupCreator() {
     });
   }
 
+  /* --- Voice Note Recording & Upload Setup in Creator --- */
+  let creatorVoiceBase64 = null;
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let recordTimerInterval = null;
+  let recordSeconds = 0;
+  let previewAudioObj = null;
+
+  const tabVoiceRecord = document.getElementById("tabVoiceRecord");
+  const tabVoiceUpload = document.getElementById("tabVoiceUpload");
+  const voiceRecordPanel = document.getElementById("voiceRecordPanel");
+  const voiceUploadPanel = document.getElementById("voiceUploadPanel");
+  const recordVoiceBtn = document.getElementById("recordVoiceBtn");
+  const recordVoiceBtnText = document.getElementById("recordVoiceBtnText");
+  const recordingTimer = document.getElementById("recordingTimer");
+  const voiceFileInput = document.getElementById("voiceFileInput");
+  const creatorAudioPreview = document.getElementById("creatorAudioPreview");
+  const previewVoicePlayBtn = document.getElementById("previewVoicePlayBtn");
+  const previewAudioDuration = document.getElementById("previewAudioDuration");
+  const deleteVoiceBtn = document.getElementById("deleteVoiceBtn");
+
+  const showCreatorAudioPreview = (base64) => {
+    creatorVoiceBase64 = base64;
+    if (!creatorAudioPreview) return;
+    creatorAudioPreview.classList.remove("hidden");
+    if (previewAudioObj) {
+      previewAudioObj.pause();
+    }
+    previewAudioObj = new Audio(base64);
+    previewAudioObj.addEventListener("loadedmetadata", () => {
+      const dur = Math.round(previewAudioObj.duration);
+      const m = Math.floor(dur / 60);
+      const s = dur % 60;
+      if (previewAudioDuration) previewAudioDuration.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
+    });
+    previewAudioObj.addEventListener("ended", () => {
+      if (previewVoicePlayBtn) previewVoicePlayBtn.textContent = "▶ Play";
+    });
+  };
+
+  const clearCreatorAudio = () => {
+    creatorVoiceBase64 = null;
+    if (previewAudioObj) {
+      previewAudioObj.pause();
+      previewAudioObj = null;
+    }
+    if (creatorAudioPreview) creatorAudioPreview.classList.add("hidden");
+    if (voiceFileInput) voiceFileInput.value = "";
+  };
+
+  if (tabVoiceRecord && tabVoiceUpload) {
+    tabVoiceRecord.onclick = () => {
+      tabVoiceRecord.classList.add("active");
+      tabVoiceRecord.setAttribute("aria-selected", "true");
+      tabVoiceUpload.classList.remove("active");
+      tabVoiceUpload.setAttribute("aria-selected", "false");
+      voiceRecordPanel.classList.remove("hidden");
+      voiceUploadPanel.classList.add("hidden");
+    };
+    tabVoiceUpload.onclick = () => {
+      tabVoiceUpload.classList.add("active");
+      tabVoiceUpload.setAttribute("aria-selected", "true");
+      tabVoiceRecord.classList.remove("active");
+      tabVoiceRecord.setAttribute("aria-selected", "false");
+      voiceUploadPanel.classList.remove("hidden");
+      voiceRecordPanel.classList.add("hidden");
+    };
+  }
+
+  // Handle Recording via Web Audio / MediaStream Recording
+  if (recordVoiceBtn) {
+    recordVoiceBtn.onclick = async () => {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        // Stop recording
+        mediaRecorder.stop();
+        recordVoiceBtn.classList.remove("recording");
+        if (recordVoiceBtnText) recordVoiceBtnText.textContent = "Tap to Record";
+        if (recordTimerInterval) {
+          clearInterval(recordTimerInterval);
+          recordTimerInterval = null;
+        }
+        return;
+      }
+
+      // Start recording
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          notifyUser("Microphone recording is not supported in this browser. Please use 'Upload Audio' instead.");
+          return;
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          stream.getTracks().forEach(track => track.stop());
+          const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            showCreatorAudioPreview(reader.result);
+          };
+          reader.readAsDataURL(audioBlob);
+        };
+
+        mediaRecorder.start();
+        recordVoiceBtn.classList.add("recording");
+        if (recordVoiceBtnText) recordVoiceBtnText.textContent = "⏹ Stop Recording";
+        if (recordingTimer) recordingTimer.classList.remove("hidden");
+
+        recordSeconds = 0;
+        if (recordingTimer) recordingTimer.textContent = "0:00";
+        recordTimerInterval = setInterval(() => {
+          recordSeconds++;
+          const m = Math.floor(recordSeconds / 60);
+          const s = recordSeconds % 60;
+          if (recordingTimer) recordingTimer.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
+          if (recordSeconds >= 60) {
+            // Auto-stop at 60s
+            recordVoiceBtn.click();
+          }
+        }, 1000);
+      } catch (micErr) {
+        console.warn("Microphone access failed:", micErr);
+        notifyUser("Microphone access was denied or unavailable. Please use 'Upload Audio' to attach a voice note.");
+      }
+    };
+  }
+
+  // Handle Audio File Upload
+  if (voiceFileInput) {
+    voiceFileInput.onchange = (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (file.size > 2.5 * 1024 * 1024) {
+        notifyUser("Audio file is a bit too large (max 2MB). Please pick a shorter audio clip.");
+        voiceFileInput.value = "";
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        showCreatorAudioPreview(event.target.result);
+      };
+      reader.readAsDataURL(file);
+    };
+  }
+
+  // Play / Pause preview
+  if (previewVoicePlayBtn) {
+    previewVoicePlayBtn.onclick = () => {
+      if (!previewAudioObj) return;
+      if (previewAudioObj.paused) {
+        previewAudioObj.play();
+        previewVoicePlayBtn.textContent = "⏸ Pause";
+      } else {
+        previewAudioObj.pause();
+        previewVoicePlayBtn.textContent = "▶ Play";
+      }
+    };
+  }
+
+  // Delete voice message
+  if (deleteVoiceBtn) {
+    deleteVoiceBtn.onclick = () => {
+      clearCreatorAudio();
+    };
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const alertBox = document.getElementById("creatorErrorAlert");
@@ -487,6 +792,7 @@ function setupCreator() {
       const data = {
         title: document.getElementById("titleInput").value.trim(),
         message: document.getElementById("messageInput").value.trim(),
+        voiceNote: creatorVoiceBase64 || null,
         customGreeting: customGreeting || "Every one of those hearts is really just... me, thinking about you.",
         bgImage: bgImage || null,
         password: password,
@@ -866,8 +1172,11 @@ function startCelebration() {
   const playGameFromLetterBtn = document.getElementById("playGameFromLetterBtn");
   const gameSection = document.getElementById("gameSection");
 
-  if (CONFIG.message && CONFIG.message.trim()) {
-    document.getElementById("displayMessage").innerText = CONFIG.message;
+  // Check if either a text message or a voice note exists
+  const hasLetterContent = (CONFIG.message && CONFIG.message.trim()) || !!CONFIG.voiceNote;
+
+  if (hasLetterContent) {
+    document.getElementById("displayMessage").innerText = CONFIG.message || "";
     envelopeSection.classList.remove("hidden");
     // Initial state: envelope closed
     envelopeTeaser.classList.remove("hidden");
@@ -882,11 +1191,18 @@ function startCelebration() {
       envelopeTeaser.classList.add("hidden");
       letterModal.classList.remove("hidden");
       letterModal.classList.remove("folding");
+
+      // Initialize and trigger voice note player with music ducking
+      initVoicePlayerForLetter();
     };
 
     // Close button on top-right: fold back into envelope
     closeLetterBtn.onclick = () => {
       playTone(440, 0.25, "sine", 0.12);
+      if (activeVoiceAudio) {
+        activeVoiceAudio.pause();
+      }
+      duckBackgroundMusic(false);
       letterModal.classList.add("folding");
       setTimeout(() => {
         letterModal.classList.add("hidden");
@@ -900,6 +1216,10 @@ function startCelebration() {
       getAudioContext();
       playEnvelopeChime();
       burstHearts(12);
+      if (activeVoiceAudio) {
+        activeVoiceAudio.pause();
+      }
+      duckBackgroundMusic(false);
       // Fold back into envelope
       letterModal.classList.add("folding");
       setTimeout(() => {
