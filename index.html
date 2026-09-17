@@ -111,6 +111,26 @@
   </div>
 </div>
 
+<!-- Firebase (fill in firebaseConfig with your project's values) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, doc, getDoc }
+    from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDtt-uO_iihx2PywqM328Wc5Lw-qsnRK-4",
+    authDomain: "surprise-23c4a.firebaseapp.com",
+    projectId: "surprise-23c4a",
+    storageBucket: "surprise-23c4a.firebasestorage.app",
+    messagingSenderId: "140034132605",
+    appId: "1:140034132605:web:38ebe5f7dbbb694323bf14"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  window.__db = getFirestore(app);
+  window.__fs = { collection, addDoc, doc, getDoc };
+</script>
 <script src="script.js"></script>
 </body>
 </html>
+
