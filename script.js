@@ -73,6 +73,44 @@ function notifyUser(msg) {
   }
 }
 
+/* ---------------- Unique User Identification & Rate Limiting ---------------- */
+function getOrCreateUserId() {
+  if (window.__auth && window.__auth.currentUser && window.__auth.currentUser.uid) {
+    return window.__auth.currentUser.uid;
+  }
+  let localId = localStorage.getItem("surprise_user_id");
+  if (!localId) {
+    localId = "usr_" + Math.random().toString(36).substring(2, 12) + "_" + Date.now().toString(36);
+    localStorage.setItem("surprise_user_id", localId);
+  }
+  return localId;
+}
+
+function checkUserHourlyRateLimit(userId) {
+  const key = "surprise_creations_" + userId;
+  const now = Date.now();
+  const oneHourAgo = now - (60 * 60 * 1000);
+  let records = [];
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) records = JSON.parse(raw);
+  } catch {
+    records = [];
+  }
+  records = records.filter(ts => typeof ts === "number" && ts > oneHourAgo);
+  if (records.length >= 10) {
+    const oldest = records[0];
+    const waitMins = Math.ceil((oldest + (60 * 60 * 1000) - now) / 60000);
+    throw new Error(`Rate limit reached: You can create a maximum of 10 links per hour. Please wait ~${waitMins} minute(s) before creating another.`);
+  }
+  return function recordCreation() {
+    records.push(Date.now());
+    try {
+      localStorage.setItem(key, JSON.stringify(records));
+    } catch {}
+  };
+}
+
 /* ---------------- Boot: figure out which screen to show ---------------- */
 document.addEventListener("DOMContentLoaded", async () => {
   if (window.__firebasePromise) {
@@ -261,6 +299,8 @@ function setupCreator() {
 
       const customGreeting = (document.getElementById("customGreetingInput")?.value || "").trim();
       const now = Date.now();
+      const userId = getOrCreateUserId();
+      const recordCreation = checkUserHourlyRateLimit(userId);
 
       const data = {
         title: document.getElementById("titleInput").value.trim(),
@@ -273,7 +313,7 @@ function setupCreator() {
         expiresAt: now + (12 * 60 * 60 * 1000), // Valid for 12 hours
         maxClicks: 10,                         // Valid for 10 clicks maximum
         clickCount: 0,
-        creatorUid: (window.__auth && window.__auth.currentUser) ? window.__auth.currentUser.uid : null
+        creatorUid: userId
       };
 
       // Check approx payload size
@@ -304,7 +344,10 @@ function setupCreator() {
         try {
           const res = await fetch('/api/surprises', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-id': userId
+            },
             body: JSON.stringify(data)
           });
           if (res.ok) {
@@ -316,9 +359,12 @@ function setupCreator() {
           }
         } catch (apiErr) {
           console.error("API save failed:", apiErr);
-          throw new Error(lastSaveError ? `Cloud error (${lastSaveError.message || lastSaveError.code}). Please try with slightly smaller photos.` : "Could not save surprise. Please check your connection and try again.");
+          throw new Error(lastSaveError ? `Cloud error (${lastSaveError.message || lastSaveError.code}). Please try with slightly smaller photos.` : (apiErr.message || "Could not save surprise. Please check your connection and try again."));
         }
       }
+
+      // Record successful creation for user's hourly limit
+      recordCreation();
 
       const finalUrl = window.location.origin + window.location.pathname + "?id=" + savedId;
 

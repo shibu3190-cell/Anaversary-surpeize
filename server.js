@@ -13,6 +13,9 @@ app.use(express.json({ limit: '15mb' }));
 // In-memory fallback store for previews or when external Firestore rules are offline
 const memorySurprises = new Map();
 
+// Rate limiting and user tracking (max 10 links per hour per user)
+const userCreationHistory = new Map();
+
 // Endpoint for client to read Firebase configuration
 app.get('/api/firebase-config', async (req, res) => {
   try {
@@ -31,14 +34,34 @@ app.get('/api/firebase-config', async (req, res) => {
   }
 });
 
-// Fallback in-memory storage endpoints with 12hr expiration & 10 clicks limit cleanup
+// Fallback in-memory storage endpoints with user isolation, 12hr expiration & 10 clicks limit cleanup
 app.post('/api/surprises', (req, res) => {
   try {
-    const id = 'mem_' + Math.random().toString(36).substring(2, 10);
     const now = Date.now();
+    // Unique user identifier: from body, auth header, or client IP
+    const userId = (req.body && req.body.creatorUid)
+      || req.headers['x-user-id']
+      || req.ip
+      || 'anon_' + Math.random().toString(36).substring(2, 8);
+
+    // Enforce 10 links per hour per user
+    const oneHourAgo = now - (60 * 60 * 1000);
+    const userTimestamps = (userCreationHistory.get(userId) || []).filter(t => t > oneHourAgo);
+
+    if (userTimestamps.length >= 10) {
+      return res.status(429).json({
+        error: "Rate limit reached: Maximum 10 surprise links per hour per user. Please wait a little while before creating another."
+      });
+    }
+
+    userTimestamps.push(now);
+    userCreationHistory.set(userId, userTimestamps);
+
+    const id = 'mem_' + Math.random().toString(36).substring(2, 10);
     const surpriseData = {
       ...req.body,
       id,
+      creatorUid: userId,
       createdAt: req.body.createdAt || now,
       expiresAt: req.body.expiresAt || (now + 12 * 60 * 60 * 1000),
       maxClicks: typeof req.body.maxClicks === 'number' ? req.body.maxClicks : 10,
@@ -53,7 +76,7 @@ app.post('/api/surprises', (req, res) => {
       }
     }
 
-    res.json({ id });
+    res.json({ id, creatorUid: userId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
