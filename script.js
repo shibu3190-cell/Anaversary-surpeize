@@ -13,7 +13,7 @@ let heartsTimer = null;
 /* ---------------- Image compression (with proper error handling) ---------------- */
 // BUG FIX: original version never rejected the promise on file-read or image-load
 // failure, so a bad file left the "Processing photos..." button stuck forever.
-function resizeImage(file, maxWidth = 480, quality = 0.6) {
+function resizeImage(file, maxWidth = 800, quality = 0.72) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Couldn't read that photo. Try a different file."));
@@ -45,35 +45,18 @@ function resizeImage(file, maxWidth = 480, quality = 0.6) {
 }
 
 /* ---------------- Boot: figure out which screen to show ---------------- */
-document.addEventListener("DOMContentLoaded", () => {
-  const rawHash = window.location.hash ? window.location.hash.substring(1) : "";
-  const urlParams = new URLSearchParams(window.location.search);
-  const legacyParam = urlParams.get("d");
+document.addEventListener("DOMContentLoaded", async () => {
+  const id = new URLSearchParams(window.location.search).get("id");
 
-  // BUG FIX: the legacy query-string path (?d=...) is already percent-decoded
-  // by URLSearchParams itself. Running decodeURIComponent on it a second time
-  // (as the previous version did) could corrupt legacy links. New links live
-  // in the hash, which is NOT auto-decoded, so only those need the manual step.
-  let base64String = null;
-  if (rawHash) {
-    try {
-      base64String = decodeURIComponent(rawHash);
-    } catch (e) {
-      base64String = null;
-    }
-  } else if (legacyParam) {
-    base64String = legacyParam;
-  }
-
-  if (base64String) {
+  if (id) {
     document.getElementById("creatorScreen").classList.add("hidden");
     try {
-      const jsonString = decodeURIComponent(escape(atob(base64String)));
-      CONFIG = JSON.parse(jsonString);
+      const { doc, getDoc } = window.__fs;
+      const snap = await getDoc(doc(window.__db, "surprises", id));
+      if (!snap.exists()) throw new Error("No surprise found for this link.");
 
-      if (!CONFIG.title || !CONFIG.password) {
-        throw new Error("Missing config values");
-      }
+      CONFIG = snap.data();
+      if (!CONFIG.title || !CONFIG.password) throw new Error("Missing config values");
 
       document.getElementById("gateScreen").classList.remove("hidden");
       setupGate();
@@ -138,29 +121,29 @@ function setupCreator() {
         title: document.getElementById("titleInput").value.trim(),
         message: document.getElementById("messageInput").value.trim(),
         password: password,
-        photos: photos
+        photos: photos,
+        createdAt: Date.now()
       };
 
-      const base64String = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-      const finalUrl = window.location.origin + window.location.pathname + "#" + encodeURIComponent(base64String);
+      // Firestore documents are capped at 1 MiB. Catch an oversized payload
+      // before sending it rather than let the write fail opaquely.
+      const approxSize = JSON.stringify(data).length;
+      if (approxSize > 900000) {
+        throw new Error("These photos are too large even for Firestore's 1MB limit — please choose smaller photos.");
+      }
+
+      generateBtn.innerText = "Saving...";
+      const { collection, addDoc } = window.__fs;
+      const ref = await addDoc(collection(window.__db, "surprises"), data);
+
+      const finalUrl = window.location.origin + window.location.pathname + "?id=" + ref.id;
 
       const urlBox = document.getElementById("generatedUrl");
       urlBox.value = finalUrl;
       document.getElementById("linkResult").classList.remove("hidden");
       urlBox.select();
       if (navigator.clipboard) navigator.clipboard.writeText(finalUrl).catch(() => {});
-
-      // Because photos are embedded directly in the link (no backend to store
-      // them on), very large or high-res photos make a very long URL. Warn
-      // early rather than let the person discover it only after sending it.
-      const warning = document.getElementById("sizeWarning");
-      if (finalUrl.length > 7000) {
-        warning.textContent = "This link is quite long (" + finalUrl.length.toLocaleString() +
-          " characters) because of the photos. It will still work in modern browsers, but if the recipient's app truncates long links, try smaller or simpler photos.";
-        warning.classList.remove("hidden");
-      } else {
-        warning.classList.add("hidden");
-      }
+      document.getElementById("sizeWarning").classList.add("hidden"); // link itself is always short now
     } catch (err) {
       alert("Error: " + err.message);
     } finally {
@@ -377,4 +360,3 @@ function launchConfetti() {
     layer.appendChild(piece);
   }
 }
-
