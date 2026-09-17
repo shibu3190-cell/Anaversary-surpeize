@@ -150,13 +150,24 @@
   </div>
 </div>
 
-<!-- Firebase (dynamic configuration from environment / server) -->
+<!-- Firebase (dynamic configuration from environment / server with static fallback for GitHub Pages) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
   import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, increment }
     from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
   import { getAuth, signInAnonymously, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+
+  // Built-in static configuration for GitHub Pages or static hostings
+  const STATIC_FIREBASE_CONFIG = {
+    projectId: "surprise-23c4a",
+    appId: "1:140034132605:web:6acf54fa0fb0fb4323bf14",
+    apiKey: "AIzaSyDtt-uO_iihx2PywqM328Wc5Lw-qsnRK-4",
+    authDomain: "surprise-23c4a.firebaseapp.com",
+    firestoreDatabaseId: "ai-studio-anaversarysurpei-02bcde01-7dad-44ea-a4c4-b7934cb60562",
+    storageBucket: "surprise-23c4a.firebasestorage.app",
+    messagingSenderId: "140034132605"
+  };
 
   window.__firebasePromise = (async () => {
     try {
@@ -171,14 +182,12 @@
           }
         }
       } catch (e) {
-        console.warn("Could not load /api/firebase-config", e);
+        // Expected when running on GitHub Pages (static hosting with no Node.js backend)
       }
 
+      // If server API was not available (e.g. GitHub Pages), use the static Firebase config
       if (!config) {
-        window.__db = null;
-        window.__auth = null;
-        window.dispatchEvent(new CustomEvent("firebase-ready", { detail: { ready: false, disconnected: true } }));
-        return;
+        config = STATIC_FIREBASE_CONFIG;
       }
 
       window.__firebaseConfig = config;
