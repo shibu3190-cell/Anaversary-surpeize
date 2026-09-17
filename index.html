@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>A Surprise For You</title>
+<meta name="description" content="A celebration link creator with photo slider, message, passcode gate, and interactive mini game">
+<meta property="og:title" content="A Surprise For You">
+<meta property="og:description" content="A celebration link creator with photo slider, message, passcode gate, and interactive mini game">
 <meta name="theme-color" content="#7a2142">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%E2%9D%A4%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -111,24 +114,42 @@
   </div>
 </div>
 
-<!-- Firebase (fill in firebaseConfig with your project's values) -->
+<!-- Firebase (dynamic configuration from environment / server) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
   import { getFirestore, collection, addDoc, doc, getDoc }
     from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyDtt-uO_iihx2PywqM328Wc5Lw-qsnRK-4",
-    authDomain: "surprise-23c4a.firebaseapp.com",
-    projectId: "surprise-23c4a",
-    storageBucket: "surprise-23c4a.firebasestorage.app",
-    messagingSenderId: "140034132605",
-    appId: "1:140034132605:web:38ebe5f7dbbb694323bf14"
-  };
+  window.__firebasePromise = (async () => {
+    try {
+      let config = {
+        apiKey: "AIzaSyDtt-uO_iihx2PywqM328Wc5Lw-qsnRK-4",
+        authDomain: "surprise-23c4a.firebaseapp.com",
+        projectId: "surprise-23c4a",
+        storageBucket: "surprise-23c4a.firebasestorage.app",
+        messagingSenderId: "140034132605",
+        appId: "1:140034132605:web:38ebe5f7dbbb694323bf14"
+      };
 
-  const app = initializeApp(firebaseConfig);
-  window.__db = getFirestore(app);
-  window.__fs = { collection, addDoc, doc, getDoc };
+      try {
+        const res = await fetch('/api/firebase-config');
+        if (res.ok) {
+          const remoteConfig = await res.json();
+          if (remoteConfig && remoteConfig.apiKey) {
+            config = remoteConfig;
+          }
+        }
+      } catch (e) {
+        console.warn("Could not load /api/firebase-config, using default config", e);
+      }
+
+      const app = initializeApp(config);
+      window.__db = getFirestore(app);
+      window.__fs = { collection, addDoc, doc, getDoc };
+    } catch (err) {
+      console.warn("Firebase initialization warning:", err);
+    }
+  })();
 </script>
 <script src="script.js"></script>
 </body>

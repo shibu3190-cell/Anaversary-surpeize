@@ -1,0 +1,8 @@
+{
+  "name": "A Surprise For You",
+  "description": "A celebration link creator with photo slider, message, passcode gate, and interactive mini game",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

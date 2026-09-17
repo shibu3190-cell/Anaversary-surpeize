@@ -44,19 +44,59 @@ function resizeImage(file, maxWidth = 800, quality = 0.72) {
   });
 }
 
+function notifyUser(msg) {
+  const warningEl = document.getElementById("sizeWarning");
+  if (warningEl) {
+    warningEl.textContent = msg;
+    warningEl.classList.remove("hidden");
+  }
+  try {
+    alert(msg);
+  } catch (e) {
+    console.warn("Alert blocked:", msg);
+  }
+}
+
 /* ---------------- Boot: figure out which screen to show ---------------- */
 document.addEventListener("DOMContentLoaded", async () => {
+  if (window.__firebasePromise) {
+    try {
+      await window.__firebasePromise;
+    } catch (e) {
+      console.warn("Firebase promise wait error:", e);
+    }
+  }
+
   const id = new URLSearchParams(window.location.search).get("id");
 
   if (id) {
     document.getElementById("creatorScreen").classList.add("hidden");
     try {
-      const { doc, getDoc } = window.__fs;
-      const snap = await getDoc(doc(window.__db, "surprises", id));
-      if (!snap.exists()) throw new Error("No surprise found for this link.");
+      let loaded = false;
+      if (window.__fs && window.__db) {
+        try {
+          const { doc, getDoc } = window.__fs;
+          const snap = await getDoc(doc(window.__db, "surprises", id));
+          if (snap.exists()) {
+            CONFIG = snap.data();
+            loaded = true;
+          }
+        } catch (fsErr) {
+          console.warn("Firestore fetch error, attempting server fallback:", fsErr);
+        }
+      }
 
-      CONFIG = snap.data();
-      if (!CONFIG.title || !CONFIG.password) throw new Error("Missing config values");
+      if (!loaded) {
+        const res = await fetch('/api/surprises/' + encodeURIComponent(id));
+        if (res.ok) {
+          CONFIG = await res.json();
+          loaded = true;
+        }
+      }
+
+      if (!loaded || !CONFIG.title || !CONFIG.password) {
+        throw new Error("No surprise found for this link.");
+      }
 
       document.getElementById("gateScreen").classList.remove("hidden");
       setupGate();
@@ -99,11 +139,11 @@ function setupCreator() {
     const password = document.getElementById("passwordInput").value.trim();
 
     if (files.length < 3) {
-      alert("Please select at least 3 photos.");
+      notifyUser("Please select at least 3 photos.");
       return;
     }
     if (!password) {
-      alert("Please set a passcode.");
+      notifyUser("Please set a passcode.");
       return;
     }
 
@@ -125,18 +165,41 @@ function setupCreator() {
         createdAt: Date.now()
       };
 
-      // Firestore documents are capped at 1 MiB. Catch an oversized payload
-      // before sending it rather than let the write fail opaquely.
+      // Check approx payload size
       const approxSize = JSON.stringify(data).length;
       if (approxSize > 900000) {
         throw new Error("These photos are too large even for Firestore's 1MB limit — please choose smaller photos.");
       }
 
       generateBtn.innerText = "Saving...";
-      const { collection, addDoc } = window.__fs;
-      const ref = await addDoc(collection(window.__db, "surprises"), data);
 
-      const finalUrl = window.location.origin + window.location.pathname + "?id=" + ref.id;
+      let savedId = null;
+      if (window.__fs && window.__db) {
+        try {
+          const { collection, addDoc } = window.__fs;
+          const ref = await addDoc(collection(window.__db, "surprises"), data);
+          if (ref && ref.id) {
+            savedId = ref.id;
+          }
+        } catch (fsErr) {
+          console.warn("Firestore save failed, falling back to local server storage:", fsErr);
+        }
+      }
+
+      if (!savedId) {
+        const res = await fetch('/api/surprises', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!res.ok) {
+          throw new Error("Could not save surprise. Please check your connection and try again.");
+        }
+        const json = await res.json();
+        savedId = json.id;
+      }
+
+      const finalUrl = window.location.origin + window.location.pathname + "?id=" + savedId;
 
       const urlBox = document.getElementById("generatedUrl");
       urlBox.value = finalUrl;
@@ -145,7 +208,7 @@ function setupCreator() {
       if (navigator.clipboard) navigator.clipboard.writeText(finalUrl).catch(() => {});
       document.getElementById("sizeWarning").classList.add("hidden"); // link itself is always short now
     } catch (err) {
-      alert("Error: " + err.message);
+      notifyUser("Error: " + err.message);
     } finally {
       generateBtn.disabled = false;
       generateBtn.innerText = "Create the Link";
