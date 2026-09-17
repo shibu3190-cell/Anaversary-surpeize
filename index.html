@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A Surprise For You</title>
+<meta name="theme-color" content="#7a2142">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%E2%9D%A4%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="floatingHearts" class="floating-hearts" aria-hidden="true"></div>
+
+<!-- Screen 1: Creator (only you ever see this) -->
+<section id="creatorScreen" class="screen creator-screen">
+  <div class="stationery">
+    <div class="seal">💌</div>
+    <h1>Craft Her Surprise</h1>
+    <p class="subtitle">Fill this in once — she gets the whole moment from one link.</p>
+
+    <form id="creatorForm" novalidate>
+      <div class="field">
+        <label for="titleInput">Occasion</label>
+        <input type="text" id="titleInput" placeholder="Happy Anniversary, Love" required>
+      </div>
+
+      <div class="field">
+        <label for="messageInput">Your message (optional)</label>
+        <textarea id="messageInput" rows="3" placeholder="Write what you'd say if she were right here..."></textarea>
+      </div>
+
+      <div class="field">
+        <label for="passwordInput">Secret passcode</label>
+        <input type="password" id="passwordInput" placeholder="Something only she'd know" required>
+      </div>
+
+      <div class="field">
+        <label for="photoFiles">Three photos of you two</label>
+        <input type="file" id="photoFiles" multiple accept="image/*" required>
+        <div id="photoPreview" class="photo-preview" aria-live="polite"></div>
+      </div>
+
+      <button type="submit" id="generateBtn" class="btn-primary">Create the Link</button>
+    </form>
+
+    <div id="linkResult" class="link-result hidden">
+      <p class="success-line">Link ready — copied for you.</p>
+      <textarea id="generatedUrl" rows="3" readonly></textarea>
+      <button id="copyBtn" type="button" class="btn-secondary">Copy Again</button>
+      <p id="sizeWarning" class="size-warning hidden"></p>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 2: Passcode gate (what she sees first) -->
+<section id="gateScreen" class="screen gate-screen hidden">
+  <div class="gate-card">
+    <div class="lock-icon">🔒</div>
+    <h2>Something's Waiting</h2>
+    <p>Enter the passcode to open it.</p>
+    <input type="password" id="unlockPasscode" placeholder="passcode" inputmode="text" autocomplete="off">
+    <button id="unlockBtn" type="button" class="btn-primary">Unlock</button>
+    <p id="gateError" class="error hidden">That's not quite it — try again.</p>
+  </div>
+</section>
+
+<!-- Screen 3: The celebration -->
+<section id="celebrationScreen" class="screen celebration-screen hidden">
+  <div class="hero">
+    <div class="slider">
+      <img id="slide1" alt="A memory of you two" class="slide active">
+      <img id="slide2" alt="A memory of you two" class="slide">
+      <img id="slide3" alt="A memory of you two" class="slide">
+      <div class="hero-fade"></div>
+      <h1 id="celebrationTitle" class="hero-title"></h1>
+    </div>
+    <div class="slider-dots" id="sliderDots">
+      <span class="dot active" data-index="0" role="button" aria-label="Show photo 1" tabindex="0"></span>
+      <span class="dot" data-index="1" role="button" aria-label="Show photo 2" tabindex="0"></span>
+      <span class="dot" data-index="2" role="button" aria-label="Show photo 3" tabindex="0"></span>
+    </div>
+  </div>
+
+  <div id="messageCard" class="letter hidden">
+    <p id="displayMessage"></p>
+  </div>
+
+  <div class="game-panel">
+    <h3>Catch the Hearts</h3>
+    <p class="game-sub">Tap 10 to unlock one more surprise — <span id="scoreDisplay">0</span>/10</p>
+    <div id="gameArea">
+      <div id="target">💗</div>
+    </div>
+  </div>
+</section>
+
+<!-- Win overlay -->
+<div id="winOverlay" class="overlay hidden">
+  <div id="confettiLayer" class="confetti-layer" aria-hidden="true"></div>
+  <div class="win-card">
+    <h2>You caught them all 🎉</h2>
+    <p>Every one of those hearts is really just... me, thinking about you.</p>
+    <div class="win-actions">
+      <button id="replayBtn" type="button" class="btn-secondary">Play Again</button>
+      <button id="closeOverlayBtn" type="button" class="btn-primary">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
