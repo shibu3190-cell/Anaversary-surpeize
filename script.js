@@ -699,8 +699,26 @@ function setupCreator() {
           }
         }, 1000);
       } catch (micErr) {
-        console.warn("Microphone access failed:", micErr);
-        notifyUser("Microphone access was denied or unavailable. Please use 'Upload Audio' to attach a voice note.");
+        // Reset recording button UI
+        recordVoiceBtn.classList.remove("recording");
+        if (recordVoiceBtnText) recordVoiceBtnText.textContent = "Tap to Record";
+        if (recordingTimer) recordingTimer.classList.add("hidden");
+        if (recordTimerInterval) {
+          clearInterval(recordTimerInterval);
+          recordTimerInterval = null;
+        }
+
+        // Auto switch to Upload Audio tab if permission was denied by browser or system
+        if (tabVoiceUpload) {
+          tabVoiceUpload.click();
+        }
+
+        const isPermissionDenied = micErr.name === "NotAllowedError" || (micErr.message && micErr.message.includes("Permission denied"));
+        const helpfulMsg = isPermissionDenied
+          ? "Microphone access was blocked by the browser or system. Switched to 'Upload Audio' so you can attach a recorded voice file directly."
+          : "Microphone unavailable. Switched to 'Upload Audio' so you can attach an audio file directly.";
+
+        notifyUser(helpfulMsg);
       }
     };
   }
