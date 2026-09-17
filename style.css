@@ -798,8 +798,8 @@ input[type=file] { width: 100%; font-size: .88rem; font-family: var(--sans); }
 #target {
   position: absolute;
   font-size: 2.2rem;
-  width: 50px;
-  height: 50px;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -809,7 +809,8 @@ input[type=file] { width: 100%; font-size: .88rem; font-family: var(--sans); }
   touch-action: manipulation;
   z-index: 2;
   line-height: 1;
-  will-change: transform, left, top;
+  will-change: transform, left, top, width, height, font-size;
+  transition: width 0.22s ease-out, height 0.22s ease-out, font-size 0.22s ease-out;
   animation: heartFloat 2.4s ease-in-out infinite alternate;
 }
 @keyframes heartFloat {
@@ -825,6 +826,32 @@ input[type=file] { width: 100%; font-size: .88rem; font-family: var(--sans); }
 @keyframes popUp {
   0% { opacity: 1; transform: translateY(0) scale(.9); }
   100% { opacity: 0; transform: translateY(-40px) scale(1.2); }
+}
+
+.tease-pop {
+  position: absolute;
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: #c93b68;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(201, 85, 122, 0.4);
+  padding: 3px 9px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(92, 26, 50, 0.15);
+  pointer-events: none;
+  animation: teaseFloat .75s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+  z-index: 4;
+  white-space: nowrap;
+}
+@keyframes teaseFloat {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(0.7); }
+  25% { opacity: 1; transform: translate(-50%, -10px) scale(1.1); }
+  100% { opacity: 0; transform: translate(-50%, -36px) scale(0.9); }
+}
+
+#target.naughty-twitch {
+  transition: transform 0.15s cubic-bezier(0.18, 0.89, 0.32, 1.28);
 }
 
 /* ---------- Creator Mode Switcher Tabs ---------- */

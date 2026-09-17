@@ -80,6 +80,12 @@ function playHeartCatchSound(currentScore) {
   playTone(baseFreq * 1.5, 0.18, "triangle", 0.12, 0.04);
 }
 
+// Naughty dodge whoosh / cute glissando sound when heart dodges a click
+function playNaughtyDodgeSound() {
+  playTone(587.33, 0.12, "sine", 0.16, 0);       // D5
+  playTone(880.00, 0.16, "triangle", 0.12, 0.05); // A5 quick glide
+}
+
 // Celebratory joyous sound when hearts are caught or celebration is completed
 function playCelebrationFanfare() {
   // Exuberant rising arpeggio chord followed by a bright sparkling chime
@@ -1071,7 +1077,7 @@ function initGame() {
   }
 
   // Motion physics state
-  const targetSize = 50; // Size of target in pixels
+  let currentTargetSize = 52; // Dynamically adjusts size (36px to 58px)
   let currentPos = { x: 50, y: 50 };
   let startPos = { x: 50, y: 50 };
   let controlPoint1 = { x: 60, y: 60 };
@@ -1080,13 +1086,30 @@ function initGame() {
   let pathStartTime = performance.now();
   let pathDuration = 2400; // ms to traverse bezier curve
   let swayPhase = Math.random() * Math.PI * 2;
+  let isNaughtyDodging = false;
+  let consecutiveDodges = 0; // Ensures heart doesn't dodge indefinitely
+
+  // Playful size tiers for the heart: changes dynamically as score advances
+  // (Starts cozy, shrinks playfully as player gets better, morphs playfully on close encounters)
+  const sizePresets = [54, 48, 44, 40, 38];
+
+  function applyHeartSize(sizePx) {
+    currentTargetSize = sizePx;
+    target.style.width = `${sizePx}px`;
+    target.style.height = `${sizePx}px`;
+    // Scale font size proportionally (approx 68% of bounding box)
+    target.style.fontSize = `${(sizePx * 0.68).toFixed(1)}px`;
+  }
+
+  // Initial size
+  applyHeartSize(sizePresets[0]);
 
   function getBounds() {
     const areaW = gameArea.clientWidth || 300;
     const areaH = gameArea.clientHeight || 200;
     const minPadding = 12;
-    const maxX = Math.max(areaW - targetSize - minPadding, minPadding);
-    const maxY = Math.max(areaH - targetSize - minPadding, minPadding);
+    const maxX = Math.max(areaW - currentTargetSize - minPadding, minPadding);
+    const maxY = Math.max(areaH - currentTargetSize - minPadding, minPadding);
     return { minX: minPadding, maxX, minY: minPadding, maxY };
   }
 
@@ -1196,18 +1219,123 @@ function initGame() {
     }
   }
 
+  // Naughty phrases that pop up when the heart cheekily slips away
+  const naughtyTeases = ["Almost! 😉", "Too slow! 💨", "Catch me! 🏃‍♀️", "So close! 💖", "Oops! ✨", "Not yet! 😜"];
+
+  function showTeasePop(x, y, text) {
+    const tease = document.createElement("div");
+    tease.className = "tease-pop";
+    tease.textContent = text;
+    tease.style.left = `${Math.round(x)}px`;
+    tease.style.top = `${Math.round(y)}px`;
+    gameArea.appendChild(tease);
+    setTimeout(() => tease.remove(), 750);
+  }
+
+  // Cheeky sideways jink / dodge when user tries to tap the heart
+  function performNaughtyDodge(touchX, touchY) {
+    if (isNaughtyDodging) return;
+    isNaughtyDodging = true;
+    consecutiveDodges++;
+
+    // Play playful dodge audio whoosh
+    playNaughtyDodgeSound();
+
+    // Double-pulse teasing haptic flutter (30ms buzz, 30ms gap, 25ms buzz)
+    triggerHaptic([30, 30, 25]);
+
+    // Show cheeky tease speech bubble at touch location
+    const teaseWord = naughtyTeases[Math.floor(Math.random() * naughtyTeases.length)];
+    showTeasePop(currentPos.x + currentTargetSize / 2, currentPos.y - 12, teaseWord);
+
+    // Compute dodge vector away from the touch position
+    const bounds = getBounds();
+    const centerX = currentPos.x + currentTargetSize / 2;
+    const centerY = currentPos.y + currentTargetSize / 2;
+    let dx = centerX - touchX;
+    let dy = centerY - touchY;
+    const dist = Math.hypot(dx, dy) || 1;
+    dx /= dist;
+    dy /= dist;
+
+    // Perpendicular sideways dart with slight backward push (naughty dodge)
+    const sideAngle = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2.5);
+    const jumpDist = 55 + Math.random() * 35; // 55px to 90px quick side-step
+    const jumpX = Math.cos(Math.atan2(dy, dx) + sideAngle) * jumpDist;
+    const jumpY = Math.sin(Math.atan2(dy, dx) + sideAngle) * jumpDist;
+
+    const newX = Math.min(Math.max(currentPos.x + jumpX, bounds.minX), bounds.maxX);
+    const newY = Math.min(Math.max(currentPos.y + jumpY, bounds.minY), bounds.maxY);
+
+    // Dynamic size pulse during dodge: heart shrinks slightly as if squishing/darting away
+    const temporaryDodgeSize = Math.max(34, Math.round(currentTargetSize * 0.84));
+    target.style.transform = `scale(0.85) rotate(${jumpX > 0 ? 18 : -18}deg)`;
+    applyHeartSize(temporaryDodgeSize);
+    target.classList.add("naughty-twitch");
+
+    currentPos = { x: newX, y: newY };
+    target.style.left = `${newX.toFixed(1)}px`;
+    target.style.top = `${newY.toFixed(1)}px`;
+
+    // Reset trajectory from new position
+    planNewBezierPath();
+
+    setTimeout(() => {
+      target.classList.remove("naughty-twitch");
+      // Restore normal tier size
+      const currentTierSize = sizePresets[Math.min(score, sizePresets.length - 1)];
+      applyHeartSize(currentTierSize);
+      target.style.transform = "scale(1)";
+      isNaughtyDodging = false;
+    }, 240);
+  }
+
+  function handleTargetPointerDown(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    getAudioContext();
+
+    const rect = target.getBoundingClientRect();
+    const touchX = e.clientX || (rect.left + rect.width / 2);
+    const touchY = e.clientY || (rect.top + rect.height / 2);
+
+    // Playful naughty dodge mechanic:
+    // With 50% probability (and if it hasn't dodged too many times consecutively),
+    // the heart cheekily darts to the side to create a "miss touch" before being caught!
+    const shouldNaughtyDodge = (consecutiveDodges < 1 || (score >= 2 && consecutiveDodges < 2)) && Math.random() < 0.52;
+
+    if (shouldNaughtyDodge && !isNaughtyDodging) {
+      performNaughtyDodge(touchX, touchY);
+      return;
+    }
+
+    // Otherwise, successful heart catch!
+    consecutiveDodges = 0;
+    hit(e);
+  }
+
   function hit(e) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
     score++;
     scoreDisplay.innerText = String(score);
     showScorePop(currentPos.x, currentPos.y, gameArea);
 
+    // Dynamically evolve the heart's size as score increases!
+    // Starts generous (54px), progressively gets nimbler (48px, 44px, 40px, 38px)
+    const nextSize = sizePresets[Math.min(score, sizePresets.length - 1)];
+    applyHeartSize(nextSize);
+
+    // Brief joyful squish bounce on capture
+    target.style.transform = "scale(1.28)";
+    setTimeout(() => {
+      if (target) target.style.transform = "scale(1)";
+    }, 180);
+
     if (score >= targetScore) {
       // Stop romantic background music and trigger celebratory fanfare joyous sound
       stopMusicWithJoyousSound();
 
       // Satisfying celebratory vibration pattern on winning (e.g. 50ms pulse, 60ms pause, 100ms pulse)
-      triggerHaptic([50, 60, 100]);
+      triggerHaptic([60, 60, 120, 80, 180]);
 
       if (targetAnimationId) {
         cancelAnimationFrame(targetAnimationId);
@@ -1239,15 +1367,15 @@ function initGame() {
       // Play sweet rising musical bell for each caught heart
       playHeartCatchSound(score);
 
-      // Crisp, tactile single haptic tap on each caught heart
-      triggerHaptic(40);
+      // Crisp, tactile satisfying haptic tap on each caught heart
+      triggerHaptic([45, 20, 35]);
 
       // Instantly start an energetic reactive curved dodge when caught
       planNewBezierPath();
     }
   }
 
-  target.onpointerdown = hit;
+  target.onpointerdown = handleTargetPointerDown;
 
   closeOverlayBtn.onclick = () => winOverlay.classList.add("hidden");
   replayBtn.onclick = () => {
