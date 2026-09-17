@@ -14,7 +14,7 @@ let score = 0;
 const targetScore = 5; // Updated: exactly 5 times to catch heart
 let sliderInterval = null;
 let heartsTimer = null;
-let targetDriftTimer = null;
+let targetAnimationId = null;
 
 /* ---------------- Romantic Web Audio Synthesizer & Sound FX Engine ---------------- */
 let audioCtx = null;
@@ -80,18 +80,26 @@ function playHeartCatchSound(currentScore) {
   playTone(baseFreq * 1.5, 0.18, "triangle", 0.12, 0.04);
 }
 
-// Celebratory fanfare chime when all hearts are caught
+// Celebratory joyous sound when hearts are caught or celebration is completed
 function playCelebrationFanfare() {
-  const melody = [
-    { freq: 523.25, dur: 0.2, delay: 0 },
-    { freq: 659.25, dur: 0.2, delay: 0.14 },
-    { freq: 783.99, dur: 0.22, delay: 0.28 },
-    { freq: 1046.50, dur: 0.6, delay: 0.44 },
-    { freq: 1318.51, dur: 0.8, delay: 0.62 }
+  // Exuberant rising arpeggio chord followed by a bright sparkling chime
+  const notes = [
+    { freq: 523.25, dur: 0.18, delay: 0, type: "sine", vol: 0.24 },       // C5
+    { freq: 659.25, dur: 0.18, delay: 0.10, type: "sine", vol: 0.24 },    // E5
+    { freq: 783.99, dur: 0.20, delay: 0.20, type: "sine", vol: 0.26 },    // G5
+    { freq: 1046.50, dur: 0.35, delay: 0.32, type: "sine", vol: 0.28 },   // C6
+    { freq: 1318.51, dur: 0.50, delay: 0.44, type: "triangle", vol: 0.22 }, // E6
+    { freq: 1567.98, dur: 0.85, delay: 0.58, type: "sine", vol: 0.26 }    // G6 joyous pinnacle
   ];
-  melody.forEach(n => {
-    playTone(n.freq, n.dur, "sine", 0.22, n.delay);
+  notes.forEach(n => {
+    playTone(n.freq, n.dur, n.type || "sine", n.vol || 0.22, n.delay);
   });
+}
+
+// Stops background music gracefully with an exuberant joyous sound
+function stopMusicWithJoyousSound() {
+  stopRomanticMelody();
+  playCelebrationFanfare();
 }
 
 // Soft looping acoustic lullaby (Canon-style romantic arpeggio progression)
@@ -536,6 +544,26 @@ function setupCreator() {
 
       const finalUrl = window.location.origin + window.location.pathname + "?id=" + savedId;
 
+      // Display the Surprise ID code prominently for the creator
+      const createdIdEl = document.getElementById("createdSurpriseId");
+      if (createdIdEl) {
+        createdIdEl.textContent = savedId;
+      }
+      const copyIdBtn = document.getElementById("copyIdBtn");
+      if (copyIdBtn) {
+        copyIdBtn.onclick = () => {
+          if (navigator.clipboard) navigator.clipboard.writeText(savedId).catch(() => {});
+          copyIdBtn.textContent = "Copied! ✨";
+          setTimeout(() => { copyIdBtn.textContent = "📋 Copy ID"; }, 2000);
+        };
+      }
+
+      // Pre-fill the lookup input in the manage tab
+      const lookupInput = document.getElementById("lookupIdInput");
+      if (lookupInput) {
+        lookupInput.value = savedId;
+      }
+
       const urlBox = document.getElementById("generatedUrl");
       urlBox.value = finalUrl;
       document.getElementById("linkResult").classList.remove("hidden");
@@ -561,7 +589,227 @@ function setupCreator() {
     if (navigator.clipboard) navigator.clipboard.writeText(copyInput.value).catch(() => {});
     const btn = document.getElementById("copyBtn");
     btn.innerText = "Copied!";
-    setTimeout(() => { btn.innerText = "Copy Again"; }, 2000);
+    setTimeout(() => { btn.innerText = "Copy Link"; }, 2000);
+  });
+
+  // Initialize the Track & Edit Management Panel
+  setupCreatorManagement();
+}
+
+/* ---------------- Creator Management & Status Tracking ---------------- */
+function setupCreatorManagement() {
+  const tabCreate = document.getElementById("tabCreateMode");
+  const tabManage = document.getElementById("tabManageMode");
+  const createPanel = document.getElementById("createPanel");
+  const managePanel = document.getElementById("managePanel");
+  const lookupBtn = document.getElementById("lookupBtn");
+  const lookupInput = document.getElementById("lookupIdInput");
+  const lookupError = document.getElementById("lookupError");
+  const statusCard = document.getElementById("statusResultCard");
+
+  if (!tabCreate || !tabManage) return;
+
+  tabCreate.addEventListener("click", () => {
+    tabCreate.classList.add("active");
+    tabCreate.setAttribute("aria-selected", "true");
+    tabManage.classList.remove("active");
+    tabManage.setAttribute("aria-selected", "false");
+    createPanel.classList.remove("hidden");
+    managePanel.classList.add("hidden");
+  });
+
+  tabManage.addEventListener("click", () => {
+    tabManage.classList.add("active");
+    tabManage.setAttribute("aria-selected", "true");
+    tabCreate.classList.remove("active");
+    tabCreate.setAttribute("aria-selected", "false");
+    managePanel.classList.remove("hidden");
+    createPanel.classList.add("hidden");
+    if (lookupInput.value.trim() && statusCard.classList.contains("hidden")) {
+      lookupBtn.click();
+    }
+  });
+
+  let currentManagedData = null;
+  let currentManagedId = null;
+
+  async function checkStatus() {
+    const id = (lookupInput.value || "").trim();
+    if (!id) {
+      lookupError.textContent = "Please enter or paste a Surprise ID code.";
+      lookupError.classList.remove("hidden");
+      return;
+    }
+    lookupError.classList.add("hidden");
+    lookupBtn.disabled = true;
+    lookupBtn.textContent = "Checking...";
+
+    try {
+      let data = null;
+
+      // 1. Try Firestore direct lookup
+      if (window.__fs && window.__db) {
+        try {
+          const { doc, getDoc } = window.__fs;
+          const snap = await getDoc(doc(window.__db, "surprises", id));
+          if (snap.exists()) {
+            const raw = snap.data();
+            const now = Date.now();
+            data = {
+              id: snap.id,
+              title: raw.title,
+              message: raw.message,
+              customGreeting: raw.customGreeting,
+              password: raw.password,
+              createdAt: raw.createdAt,
+              expiresAt: raw.expiresAt,
+              clickCount: raw.clickCount || 0,
+              maxClicks: raw.maxClicks || 10,
+              isExpired: raw.expiresAt ? (now > raw.expiresAt) : false,
+              timeRemainingMs: Math.max(0, (raw.expiresAt || 0) - now),
+              creatorUid: raw.creatorUid
+            };
+          }
+        } catch (fsErr) {
+          console.warn("Firestore lookup check error:", fsErr);
+        }
+      }
+
+      // 2. Fallback to API status endpoint
+      if (!data) {
+        const res = await fetch(`/api/surprises/${encodeURIComponent(id)}/status`);
+        if (res.ok) {
+          data = await res.json();
+        } else {
+          const errRes = await res.json().catch(() => ({}));
+          throw new Error(errRes.error || "Surprise not found. It may have expired or the ID is invalid.");
+        }
+      }
+
+      currentManagedData = data;
+      currentManagedId = id;
+
+      // Render metrics
+      document.getElementById("statusTitle").textContent = data.title || "Surprise Moment";
+      
+      const badge = document.getElementById("statusBadge");
+      if (data.isExpired || (data.clickCount >= data.maxClicks)) {
+        badge.className = "badge-expired";
+        badge.textContent = "Expired / Limit Reached";
+      } else {
+        badge.className = "badge-active";
+        badge.textContent = "Active & Live";
+      }
+
+      document.getElementById("statusClickCount").textContent = `${data.clickCount || 0} / ${data.maxClicks || 10}`;
+
+      // Time remaining formatting
+      const remainingMs = Math.max(0, (data.expiresAt || 0) - Date.now());
+      const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
+      const remainingMins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+      document.getElementById("statusTimeRemaining").textContent = remainingMs > 0 ? `${remainingHours}h ${remainingMins}m` : "Expired";
+
+      // Created & Expires at human dates
+      const createdDate = data.createdAt ? new Date(data.createdAt) : new Date();
+      const expiresDate = data.expiresAt ? new Date(data.expiresAt) : new Date(Date.now() + 12 * 3600000);
+      document.getElementById("statusCreatedAt").textContent = createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ", " + createdDate.toLocaleDateString();
+      document.getElementById("statusExpiresAt").textContent = expiresDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ", " + expiresDate.toLocaleDateString();
+
+      // Setup Link button
+      const openBtn = document.getElementById("openManagedLinkBtn");
+      const targetUrl = window.location.origin + window.location.pathname + "?id=" + encodeURIComponent(id);
+      openBtn.onclick = () => window.open(targetUrl, "_blank");
+
+      // Setup editable fields
+      document.getElementById("editTitleInput").value = data.title || "";
+      document.getElementById("editMessageInput").value = data.message || "";
+      document.getElementById("editCustomGreetingInput").value = data.customGreeting || "";
+      document.getElementById("editPasswordInput").value = data.password || "";
+
+      statusCard.classList.remove("hidden");
+    } catch (err) {
+      lookupError.textContent = err.message || "Failed to look up surprise.";
+      lookupError.classList.remove("hidden");
+      statusCard.classList.add("hidden");
+    } finally {
+      lookupBtn.disabled = false;
+      lookupBtn.textContent = "Check";
+    }
+  }
+
+  lookupBtn.addEventListener("click", checkStatus);
+  lookupInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") checkStatus();
+  });
+
+  // Toggle Edit details section
+  const toggleEditBtn = document.getElementById("toggleEditBtn");
+  const editContainer = document.getElementById("editFieldsContainer");
+  const saveEditBtn = document.getElementById("saveEditBtn");
+  const cancelEditBtn = document.getElementById("cancelEditBtn");
+  const editNotice = document.getElementById("editNotice");
+
+  toggleEditBtn.addEventListener("click", () => {
+    const isHidden = editContainer.classList.contains("hidden");
+    if (isHidden) {
+      editContainer.classList.remove("hidden");
+      toggleEditBtn.textContent = "▲ Close Editor";
+      if (editNotice) editNotice.classList.add("hidden");
+    } else {
+      editContainer.classList.add("hidden");
+      toggleEditBtn.textContent = "✏️ Edit Details";
+    }
+  });
+
+  cancelEditBtn.addEventListener("click", () => {
+    editContainer.classList.add("hidden");
+    toggleEditBtn.textContent = "✏️ Edit Details";
+  });
+
+  saveEditBtn.addEventListener("click", async () => {
+    if (!currentManagedId) return;
+    saveEditBtn.disabled = true;
+    saveEditBtn.textContent = "Saving...";
+    if (editNotice) editNotice.classList.add("hidden");
+
+    const updated = {
+      title: document.getElementById("editTitleInput").value.trim(),
+      message: document.getElementById("editMessageInput").value.trim(),
+      customGreeting: document.getElementById("editCustomGreetingInput").value.trim(),
+      password: document.getElementById("editPasswordInput").value.trim()
+    };
+
+    try {
+      // 1. Update Firestore if accessible
+      if (window.__fs && window.__db) {
+        try {
+          const { doc, updateDoc } = window.__fs;
+          await updateDoc(doc(window.__db, "surprises", currentManagedId), updated);
+        } catch (fsErr) {
+          console.warn("Firestore update error:", fsErr);
+        }
+      }
+
+      // 2. Also update server memory
+      await fetch(`/api/surprises/${encodeURIComponent(currentManagedId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated)
+      });
+
+      if (editNotice) {
+        editNotice.classList.remove("hidden");
+        editNotice.textContent = "Changes saved successfully! ✨";
+      }
+
+      // Update card title
+      document.getElementById("statusTitle").textContent = updated.title || "Surprise Moment";
+    } catch (err) {
+      alert("Could not update surprise: " + err.message);
+    } finally {
+      saveEditBtn.disabled = false;
+      saveEditBtn.textContent = "Save Changes";
+    }
   });
 }
 
@@ -801,7 +1049,7 @@ function initSlider() {
   resetTimer();
 }
 
-/* ---------------- Mini game (Gentle Drifting, 5 Hearts Target) ---------------- */
+/* ---------------- Mini game (Organic Bezier Curve & Swaying Heart) ---------------- */
 function initGame() {
   const target = document.getElementById("target");
   const gameArea = document.getElementById("gameArea");
@@ -817,38 +1065,126 @@ function initGame() {
   scoreDisplay.innerText = "0";
   target.style.display = "flex";
 
-  if (targetDriftTimer) {
-    clearInterval(targetDriftTimer);
-    targetDriftTimer = null;
+  if (targetAnimationId) {
+    cancelAnimationFrame(targetAnimationId);
+    targetAnimationId = null;
   }
 
-  function moveTarget() {
+  // Motion physics state
+  const targetSize = 50; // Size of target in pixels
+  let currentPos = { x: 50, y: 50 };
+  let startPos = { x: 50, y: 50 };
+  let controlPoint1 = { x: 60, y: 60 };
+  let controlPoint2 = { x: 70, y: 70 };
+  let endPos = { x: 80, y: 80 };
+  let pathStartTime = performance.now();
+  let pathDuration = 2400; // ms to traverse bezier curve
+  let swayPhase = Math.random() * Math.PI * 2;
+
+  function getBounds() {
     const areaW = gameArea.clientWidth || 300;
-    const areaH = gameArea.clientHeight || 230;
-    const maxX = Math.max(areaW - 60, 30);
-    const maxY = Math.max(areaH - 60, 30);
-    const randX = Math.floor(Math.random() * maxX) + 15;
-    const randY = Math.floor(Math.random() * maxY) + 15;
-    target.style.left = `${randX}px`;
-    target.style.top = `${randY}px`;
+    const areaH = gameArea.clientHeight || 200;
+    const minPadding = 12;
+    const maxX = Math.max(areaW - targetSize - minPadding, minPadding);
+    const maxY = Math.max(areaH - targetSize - minPadding, minPadding);
+    return { minX: minPadding, maxX, minY: minPadding, maxY };
   }
 
-  // Gentle subtle continuous drift every 1.8 seconds so touches can miss if not timed well, but not frustratingly fast
-  targetDriftTimer = setInterval(() => {
-    if (score < targetScore) {
-      const areaW = gameArea.clientWidth || 300;
-      const areaH = gameArea.clientHeight || 230;
-      const currentX = parseFloat(target.style.left) || 40;
-      const currentY = parseFloat(target.style.top) || 40;
-      // Gentle shift of 25-50px in random direction
-      const deltaX = (Math.random() * 60 - 30);
-      const deltaY = (Math.random() * 50 - 25);
-      const newX = Math.min(Math.max(currentX + deltaX, 15), Math.max(areaW - 60, 20));
-      const newY = Math.min(Math.max(currentY + deltaY, 15), Math.max(areaH - 60, 20));
-      target.style.left = `${newX}px`;
-      target.style.top = `${newY}px`;
+  function pickRandomPoint(bounds) {
+    return {
+      x: bounds.minX + Math.random() * (bounds.maxX - bounds.minX),
+      y: bounds.minY + Math.random() * (bounds.maxY - bounds.minY)
+    };
+  }
+
+  // Cubic bezier calculation: B(t) = (1-t)^3*P0 + 3(1-t)^2*t*P1 + 3(1-t)*t^2*P2 + t^3*P3
+  function getCubicBezierPoint(t, p0, p1, p2, p3) {
+    const u = 1 - t;
+    const tt = t * t;
+    const uu = u * u;
+    const uuu = uu * u;
+    const ttt = tt * t;
+
+    return {
+      x: uuu * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + ttt * p3.x,
+      y: uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y
+    };
+  }
+
+  // Generate a new organic bezier flight path within the game container
+  function planNewBezierPath() {
+    const bounds = getBounds();
+    startPos = { ...currentPos };
+    endPos = pickRandomPoint(bounds);
+
+    // Pick control points that arc organically across the area
+    const midX = (startPos.x + endPos.x) / 2;
+    const midY = (startPos.y + endPos.y) / 2;
+    const offsetMag = Math.min(80, (bounds.maxX - bounds.minX) * 0.4);
+
+    controlPoint1 = {
+      x: Math.min(Math.max(midX + (Math.random() * 2 - 1) * offsetMag, bounds.minX), bounds.maxX),
+      y: Math.min(Math.max(startPos.y + (Math.random() * 2 - 1) * offsetMag, bounds.minY), bounds.maxY)
+    };
+    controlPoint2 = {
+      x: Math.min(Math.max(midX + (Math.random() * 2 - 1) * offsetMag, bounds.minX), bounds.maxX),
+      y: Math.min(Math.max(endPos.y + (Math.random() * 2 - 1) * offsetMag, bounds.minY), bounds.maxY)
+    };
+
+    // Calculate dynamic flight duration proportional to distance
+    const dist = Math.hypot(endPos.x - startPos.x, endPos.y - startPos.y);
+    pathDuration = Math.max(1600, Math.min(3200, dist * 10 + 1200));
+    pathStartTime = performance.now();
+  }
+
+  // Set initial position
+  const initialBounds = getBounds();
+  currentPos = pickRandomPoint(initialBounds);
+  target.style.left = `${currentPos.x}px`;
+  target.style.top = `${currentPos.y}px`;
+  planNewBezierPath();
+
+  // Smooth sinusoidal ease-in-out
+  function smoothEaseInOut(t) {
+    return 0.5 * (1 - Math.cos(Math.PI * t));
+  }
+
+  // Continuous animation frame loop for fluid organic bezier & harmonic swaying motion
+  function animateHeart(now) {
+    if (score >= targetScore) return;
+
+    const bounds = getBounds();
+    const elapsed = now - pathStartTime;
+    const progress = Math.min(elapsed / pathDuration, 1);
+    const easedProgress = smoothEaseInOut(progress);
+
+    // Calculate base bezier curve position
+    const bezierPos = getCubicBezierPoint(easedProgress, startPos, controlPoint1, controlPoint2, endPos);
+
+    // Add gentle organic pendulum sway (subtle sine & cosine drift)
+    swayPhase += 0.035;
+    const swayX = Math.sin(swayPhase) * 6;
+    const swayY = Math.cos(swayPhase * 0.8) * 5;
+    const rotationAngle = Math.sin(swayPhase * 1.2) * 12;
+
+    // Strict boundary enforcement so target is never cropped or pushed outside
+    const clampedX = Math.min(Math.max(bezierPos.x + swayX, bounds.minX), bounds.maxX);
+    const clampedY = Math.min(Math.max(bezierPos.y + swayY, bounds.minY), bounds.maxY);
+
+    currentPos = { x: clampedX, y: clampedY };
+    target.style.left = `${clampedX.toFixed(1)}px`;
+    target.style.top = `${clampedY.toFixed(1)}px`;
+    target.style.transform = `rotate(${rotationAngle.toFixed(1)}deg)`;
+
+    // When current curve completes, plan next organic path seamlessly
+    if (progress >= 1) {
+      planNewBezierPath();
     }
-  }, 1800);
+
+    targetAnimationId = requestAnimationFrame(animateHeart);
+  }
+
+  targetAnimationId = requestAnimationFrame(animateHeart);
 
   function triggerHaptic(pattern = [40]) {
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
@@ -864,18 +1200,18 @@ function initGame() {
     if (e) { e.preventDefault(); e.stopPropagation(); }
     score++;
     scoreDisplay.innerText = String(score);
-    showScorePop(parseFloat(target.style.left) || 0, parseFloat(target.style.top) || 0, gameArea);
+    showScorePop(currentPos.x, currentPos.y, gameArea);
 
     if (score >= targetScore) {
-      // Play celebratory chime fanfare
-      playCelebrationFanfare();
+      // Stop romantic background music and trigger celebratory fanfare joyous sound
+      stopMusicWithJoyousSound();
 
       // Satisfying celebratory vibration pattern on winning (e.g. 50ms pulse, 60ms pause, 100ms pulse)
       triggerHaptic([50, 60, 100]);
 
-      if (targetDriftTimer) {
-        clearInterval(targetDriftTimer);
-        targetDriftTimer = null;
+      if (targetAnimationId) {
+        cancelAnimationFrame(targetAnimationId);
+        targetAnimationId = null;
       }
       target.style.display = "none";
 
@@ -905,7 +1241,9 @@ function initGame() {
 
       // Crisp, tactile single haptic tap on each caught heart
       triggerHaptic(40);
-      moveTarget();
+
+      // Instantly start an energetic reactive curved dodge when caught
+      planNewBezierPath();
     }
   }
 
@@ -922,8 +1260,6 @@ function initGame() {
       window.location.href = window.location.pathname;
     };
   }
-
-  moveTarget();
 }
 
 function showScorePop(x, y, container) {

@@ -36,66 +36,159 @@
 <section id="creatorScreen" class="screen creator-screen">
   <div class="stationery">
     <div class="seal">💌</div>
-    <h1>Craft Her Surprise</h1>
-    <p class="subtitle">Fill this in once — she gets the whole moment from one link.</p>
+    <h1>Craft a Surprise</h1>
+    <p class="subtitle">Fill this in once — they get the whole moment from one private link.</p>
     
     <div id="cloudStatusBadge" class="cloud-status" aria-live="polite">
       <span class="cloud-dot"></span>
       <span id="cloudStatusText">Online</span>
     </div>
 
-    <form id="creatorForm" novalidate>
+    <!-- Switcher between Create New & Manage Existing Link -->
+    <div class="creator-mode-tabs" role="tablist">
+      <button type="button" id="tabCreateMode" class="creator-tab active" role="tab" aria-selected="true">✨ New Surprise</button>
+      <button type="button" id="tabManageMode" class="creator-tab" role="tab" aria-selected="false">🔍 Track / Edit by ID</button>
+    </div>
+
+    <!-- Panel 1: Create New Form -->
+    <div id="createPanel">
+      <form id="creatorForm" novalidate>
+        <div class="field">
+          <label for="titleInput">Occasion</label>
+          <input type="text" id="titleInput" placeholder="Happy Anniversary, Love" required>
+        </div>
+
+        <div class="field">
+          <label for="messageInput">Your message (optional)</label>
+          <textarea id="messageInput" rows="3" placeholder="Write what you'd say if they were right here..."></textarea>
+        </div>
+
+        <div class="field">
+          <label for="customGreetingInput">Ending Greeting after game (optional)</label>
+          <input type="text" id="customGreetingInput" placeholder="Default: Every one of those hearts is really just... me, thinking about you.">
+        </div>
+
+        <div class="field">
+          <label for="passwordInput">Secret passcode</label>
+          <input type="password" id="passwordInput" placeholder="Something only they would know" required>
+        </div>
+
+        <div class="field">
+          <label for="photoFiles">Photos (up to 3)</label>
+          <input type="file" id="photoFiles" multiple accept="image/*" required>
+          <div id="photoPreview" class="photo-preview" aria-live="polite"></div>
+        </div>
+
+        <div class="field">
+          <label for="bgFileInput">Win Screen Background Photo (optional)</label>
+          <input type="file" id="bgFileInput" accept="image/*">
+          <div id="bgPreview" class="photo-preview" aria-live="polite"></div>
+          <small class="field-hint">Displays as ambient backdrop when they complete the heart game</small>
+        </div>
+
+        <div class="field-meta-note">
+          <span class="lock-tag">⚡ Privacy & Security</span>: Link expires in 12 hours or after 10 clicks to keep data fresh and clean.
+        </div>
+
+        <div id="creatorErrorAlert" class="error-banner hidden" role="alert"></div>
+
+        <button type="submit" id="generateBtn" class="btn-primary">Create the Link</button>
+      </form>
+
+      <div id="linkResult" class="link-result hidden">
+        <p class="success-line">Link ready — copied for you.</p>
+        
+        <!-- Creator ID Display Badge -->
+        <div class="creator-id-badge-container">
+          <span class="creator-id-label">Your Surprise ID:</span>
+          <span id="createdSurpriseId" class="creator-id-code"></span>
+          <button type="button" id="copyIdBtn" class="btn-copy-id" title="Copy Surprise ID">📋 Copy ID</button>
+        </div>
+        <p class="creator-id-note">Keep this ID to check clicks, remaining time, or edit the message anytime!</p>
+
+        <textarea id="generatedUrl" rows="3" readonly></textarea>
+        <div class="result-actions">
+          <button id="copyBtn" type="button" class="btn-secondary">Copy Link</button>
+          <button id="openPreviewBtn" type="button" class="btn-secondary">Open Link</button>
+        </div>
+        <p class="link-expiry-notice">⏱️ Valid for 12 hours • Up to 10 clicks</p>
+        <p id="sizeWarning" class="size-warning hidden"></p>
+      </div>
+    </div>
+
+    <!-- Panel 2: Track & Edit by ID -->
+    <div id="managePanel" class="manage-panel hidden">
       <div class="field">
-        <label for="titleInput">Occasion</label>
-        <input type="text" id="titleInput" placeholder="Happy Anniversary, Love" required>
+        <label for="lookupIdInput">Surprise ID Code</label>
+        <div class="input-action-row">
+          <input type="text" id="lookupIdInput" placeholder="Paste your surprise ID here..." autocomplete="off">
+          <button type="button" id="lookupBtn" class="btn-secondary">Check</button>
+        </div>
       </div>
+      <p id="lookupError" class="error hidden"></p>
 
-      <div class="field">
-        <label for="messageInput">Your message (optional)</label>
-        <textarea id="messageInput" rows="3" placeholder="Write what you'd say if she were right here..."></textarea>
+      <!-- Status Card Display -->
+      <div id="statusResultCard" class="status-result-card hidden">
+        <div class="status-header">
+          <h3 id="statusTitle">Surprise Status</h3>
+          <span id="statusBadge" class="badge-active">Active</span>
+        </div>
+
+        <div class="status-metrics-grid">
+          <div class="metric-item">
+            <span class="metric-value" id="statusClickCount">0 / 10</span>
+            <span class="metric-label">Clicks Used</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-value" id="statusTimeRemaining">12h 00m</span>
+            <span class="metric-label">Time Remaining</span>
+          </div>
+        </div>
+
+        <div class="status-details">
+          <div class="status-detail-row">
+            <span class="detail-name">Created:</span>
+            <span class="detail-val" id="statusCreatedAt">-</span>
+          </div>
+          <div class="status-detail-row">
+            <span class="detail-name">Expires:</span>
+            <span class="detail-val" id="statusExpiresAt">-</span>
+          </div>
+        </div>
+
+        <!-- Inline Editor Form for Content -->
+        <div class="status-edit-section">
+          <button type="button" id="toggleEditBtn" class="btn-secondary btn-full">✏️ Edit Details</button>
+          
+          <div id="editFieldsContainer" class="edit-fields-container hidden">
+            <div class="field">
+              <label for="editTitleInput">Occasion Title</label>
+              <input type="text" id="editTitleInput">
+            </div>
+            <div class="field">
+              <label for="editMessageInput">Message</label>
+              <textarea id="editMessageInput" rows="3"></textarea>
+            </div>
+            <div class="field">
+              <label for="editCustomGreetingInput">Ending Greeting</label>
+              <input type="text" id="editCustomGreetingInput">
+            </div>
+            <div class="field">
+              <label for="editPasswordInput">Secret Passcode</label>
+              <input type="password" id="editPasswordInput">
+            </div>
+            <div class="edit-actions">
+              <button type="button" id="saveEditBtn" class="btn-primary">Save Changes</button>
+              <button type="button" id="cancelEditBtn" class="btn-ghost">Cancel</button>
+            </div>
+            <p id="editNotice" class="success-line hidden">Changes saved successfully! ✨</p>
+          </div>
+        </div>
+
+        <div class="status-actions">
+          <button type="button" id="openManagedLinkBtn" class="btn-primary btn-full">🔗 Open Surprise Link</button>
+        </div>
       </div>
-
-      <div class="field">
-        <label for="customGreetingInput">Ending Greeting after game (optional)</label>
-        <input type="text" id="customGreetingInput" placeholder="Default: Every one of those hearts is really just... me, thinking about you.">
-      </div>
-
-      <div class="field">
-        <label for="passwordInput">Secret passcode</label>
-        <input type="password" id="passwordInput" placeholder="Something only she'd know" required>
-      </div>
-
-      <div class="field">
-        <label for="photoFiles">Photos of you two (up to 3)</label>
-        <input type="file" id="photoFiles" multiple accept="image/*" required>
-        <div id="photoPreview" class="photo-preview" aria-live="polite"></div>
-      </div>
-
-      <div class="field">
-        <label for="bgFileInput">Win Screen Background Photo (optional)</label>
-        <input type="file" id="bgFileInput" accept="image/*">
-        <div id="bgPreview" class="photo-preview" aria-live="polite"></div>
-        <small class="field-hint">Displays as ambient backdrop when she completes the heart game</small>
-      </div>
-
-      <div class="field-meta-note">
-        <span class="lock-tag">⚡ Privacy & Security</span>: Link expires in 12 hours or after 10 clicks to keep data fresh and clean.
-      </div>
-
-      <div id="creatorErrorAlert" class="error-banner hidden" role="alert"></div>
-
-      <button type="submit" id="generateBtn" class="btn-primary">Create the Link</button>
-    </form>
-
-    <div id="linkResult" class="link-result hidden">
-      <p class="success-line">Link ready — copied for you.</p>
-      <textarea id="generatedUrl" rows="3" readonly></textarea>
-      <div class="result-actions">
-        <button id="copyBtn" type="button" class="btn-secondary">Copy Again</button>
-        <button id="openPreviewBtn" type="button" class="btn-secondary">Open Link</button>
-      </div>
-      <p class="link-expiry-notice">⏱️ Valid for 12 hours • Up to 10 clicks</p>
-      <p id="sizeWarning" class="size-warning hidden"></p>
     </div>
   </div>
 </section>

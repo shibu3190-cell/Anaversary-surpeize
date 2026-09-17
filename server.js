@@ -105,6 +105,46 @@ app.get('/api/surprises/:id', (req, res) => {
   res.json(data);
 });
 
+// Get surprise status (without incrementing click count) for creators
+app.get('/api/surprises/:id/status', (req, res) => {
+  const data = memorySurprises.get(req.params.id);
+  if (!data) {
+    return res.status(404).json({ error: 'Surprise not found or has expired' });
+  }
+  const now = Date.now();
+  const isExpired = !!(data.expiresAt && now > data.expiresAt);
+  res.json({
+    id: data.id,
+    title: data.title,
+    message: data.message,
+    customGreeting: data.customGreeting,
+    createdAt: data.createdAt,
+    expiresAt: data.expiresAt,
+    clickCount: data.clickCount || 0,
+    maxClicks: data.maxClicks || 10,
+    isExpired,
+    timeRemainingMs: Math.max(0, (data.expiresAt || 0) - now),
+    creatorUid: data.creatorUid
+  });
+});
+
+// Update surprise content (for creators)
+app.put('/api/surprises/:id', (req, res) => {
+  const existing = memorySurprises.get(req.params.id);
+  if (!existing) {
+    return res.status(404).json({ error: 'Surprise not found or has expired' });
+  }
+
+  const { title, message, customGreeting, password } = req.body;
+  if (title) existing.title = title;
+  if (typeof message === 'string') existing.message = message;
+  if (typeof customGreeting === 'string') existing.customGreeting = customGreeting;
+  if (password) existing.password = password;
+
+  memorySurprises.set(req.params.id, existing);
+  res.json({ success: true, surprise: existing });
+});
+
 // Static assets
 app.use(express.static(__dirname));
 
