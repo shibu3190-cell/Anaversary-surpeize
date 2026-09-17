@@ -408,14 +408,6 @@
       window.__fs = { collection, addDoc, doc, getDoc, updateDoc, increment };
       window.__authModule = { signInAnonymously, onAuthStateChanged };
 
-      // Authenticate session if anonymous sign-in is enabled in Firebase Console; fallback gracefully if disabled
-      try {
-        await signInAnonymously(auth);
-      } catch (authErr) {
-        // If auth/admin-restricted-operation (anonymous sign-in not enabled in console),
-        // proceed smoothly as anonymous/unauthenticated guest (Firestore rules handle read/create)
-      }
-
       window.dispatchEvent(new CustomEvent("firebase-ready", { detail: { ready: true, projectId: config.projectId } }));
     } catch (err) {
       console.warn("Firebase initialization warning:", err);
