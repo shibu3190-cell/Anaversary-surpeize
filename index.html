@@ -13,10 +13,24 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script>
+  // Hide creator screen immediately if a surprise ID is present in URL
+  if (window.location.search.indexOf('id=') !== -1) {
+    document.documentElement.classList.add('has-surprise-id');
+  }
+</script>
 </head>
 <body>
 
 <div id="floatingHearts" class="floating-hearts" aria-hidden="true"></div>
+
+<!-- Initial receiver loading state to prevent flash of creator details -->
+<div id="receiverLoading" class="receiver-loading hidden" aria-live="polite">
+  <div class="loader-content">
+    <div class="loader-heart">💌</div>
+    <p class="loader-text">Opening your surprise...</p>
+  </div>
+</div>
 
 <!-- Screen 1: Creator (only you ever see this) -->
 <section id="creatorScreen" class="screen creator-screen">
@@ -98,7 +112,7 @@
   </div>
 </section>
 
-<!-- Screen 3: The celebration -->
+  <!-- Screen 3: The celebration -->
 <section id="celebrationScreen" class="screen celebration-screen hidden">
   <div class="hero">
     <div class="slider">
@@ -113,13 +127,54 @@
       <span class="dot" data-index="1" role="button" aria-label="Show photo 2" tabindex="0"></span>
       <span class="dot" data-index="2" role="button" aria-label="Show photo 3" tabindex="0"></span>
     </div>
+    <!-- Music & Sound Toggle Button -->
+    <button type="button" id="musicToggleBtn" class="btn-music-toggle" aria-label="Toggle romantic music" title="Toggle romantic music">
+      <span class="music-icon" aria-hidden="true">🎵</span>
+      <span class="music-waves" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </span>
+    </button>
   </div>
 
-  <div id="messageCard" class="letter hidden">
-    <p id="displayMessage"></p>
+  <!-- Interactive Envelope Container -->
+  <div id="envelopeSection" class="envelope-section hidden">
+    <!-- Envelope closed teaser state -->
+    <div id="envelopeTeaser" class="envelope-card">
+      <div class="envelope-graphic">
+        <div class="envelope-flap"></div>
+        <div class="envelope-pocket"></div>
+        <div class="envelope-wax-seal">💌</div>
+      </div>
+      <div class="envelope-meta">
+        <h3 class="envelope-prompt">A special note for you</h3>
+        <p class="envelope-sub">Sealed with love • Tap to unfold</p>
+      </div>
+      <button type="button" id="openEnvelopeBtn" class="btn-open-envelope">
+        <span class="envelope-btn-icon">✨</span> Open Letter
+      </button>
+    </div>
+
+    <!-- Letter unfolded modal/card state -->
+    <div id="letterModal" class="letter-card-wrapper hidden">
+      <div class="letter-card">
+        <button type="button" id="closeLetterBtn" class="btn-close-letter" aria-label="Fold back into envelope" title="Fold back into envelope">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        <div class="letter-stamp">❤️</div>
+        <div class="letter-scroll-body">
+          <p id="displayMessage" class="letter-body-text"></p>
+        </div>
+        <div class="letter-footer">
+          <button type="button" id="playGameFromLetterBtn" class="btn-cute-more">
+            <span>Click for more</span>
+            <span class="btn-cute-heart">💖</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <div class="game-panel">
+  <div id="gameSection" class="game-panel">
     <h3>Catch the Hearts</h3>
     <p class="game-sub">Catch 5 hearts to unlock the celebration surprise — <span id="scoreDisplay">0</span>/5</p>
     <div id="gameArea">

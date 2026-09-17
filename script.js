@@ -16,6 +16,160 @@ let sliderInterval = null;
 let heartsTimer = null;
 let targetDriftTimer = null;
 
+/* ---------------- Romantic Web Audio Synthesizer & Sound FX Engine ---------------- */
+let audioCtx = null;
+let isAudioMuted = false;
+let bgMusicInterval = null;
+let bgMusicStep = 0;
+let masterGain = null;
+let isMusicPlaying = false;
+
+function getAudioContext() {
+  if (!audioCtx) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass) {
+      audioCtx = new AudioContextClass();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+      masterGain.connect(audioCtx.destination);
+    }
+  }
+  if (audioCtx && audioCtx.state === "suspended") {
+    audioCtx.resume().catch(() => {});
+  }
+  return audioCtx;
+}
+
+// Gentle celesta/music box chime note
+function playTone(freq, duration = 0.5, type = "sine", gainLevel = 0.25, timeOffset = 0) {
+  const ctx = getAudioContext();
+  if (!ctx || isAudioMuted) return;
+
+  const startTime = ctx.currentTime + timeOffset;
+  const osc = ctx.createOscillator();
+  const noteGain = ctx.createGain();
+
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, startTime);
+
+  // Soft attack, gentle bell decay
+  noteGain.gain.setValueAtTime(0.0001, startTime);
+  noteGain.gain.linearRampToValueAtTime(gainLevel, startTime + 0.04);
+  noteGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+  osc.connect(noteGain);
+  noteGain.connect(masterGain || ctx.destination);
+
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.05);
+}
+
+// Warm chord arpeggio for opening envelope / letter
+function playEnvelopeChime() {
+  const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+  notes.forEach((freq, i) => {
+    playTone(freq, 0.6, "sine", 0.18, i * 0.07);
+  });
+}
+
+// Crisp sweet pop sound when a heart is caught
+function playHeartCatchSound(currentScore) {
+  const scale = [440, 493.88, 554.37, 659.25, 739.99, 880]; // A4, B4, C#5, E5, F#5, A5
+  const baseFreq = scale[Math.min(currentScore - 1, scale.length - 1)] || 523.25;
+  playTone(baseFreq, 0.22, "sine", 0.22, 0);
+  playTone(baseFreq * 1.5, 0.18, "triangle", 0.12, 0.04);
+}
+
+// Celebratory fanfare chime when all hearts are caught
+function playCelebrationFanfare() {
+  const melody = [
+    { freq: 523.25, dur: 0.2, delay: 0 },
+    { freq: 659.25, dur: 0.2, delay: 0.14 },
+    { freq: 783.99, dur: 0.22, delay: 0.28 },
+    { freq: 1046.50, dur: 0.6, delay: 0.44 },
+    { freq: 1318.51, dur: 0.8, delay: 0.62 }
+  ];
+  melody.forEach(n => {
+    playTone(n.freq, n.dur, "sine", 0.22, n.delay);
+  });
+}
+
+// Soft looping acoustic lullaby (Canon-style romantic arpeggio progression)
+function startRomanticMelody() {
+  if (bgMusicInterval) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  isMusicPlaying = true;
+  updateMusicToggleUI();
+
+  // Romantic progression in C major / A minor
+  // Beautiful music box / rhodes timbre
+  const arpeggios = [
+    [523.25, 659.25, 783.99, 1046.50], // C
+    [392.00, 493.88, 587.33, 783.99],  // G
+    [440.00, 523.25, 659.25, 880.00],  // Am
+    [349.23, 440.00, 523.25, 698.46],  // F
+    [523.25, 659.25, 783.99, 1046.50], // C
+    [349.23, 440.00, 523.25, 698.46],  // F
+    [392.00, 493.88, 587.33, 783.99],  // G
+    [523.25, 659.25, 783.99, 1046.50]  // C
+  ];
+
+  bgMusicStep = 0;
+  let noteIndex = 0;
+
+  bgMusicInterval = setInterval(() => {
+    if (isAudioMuted || !isMusicPlaying) return;
+
+    const currentChord = arpeggios[bgMusicStep];
+    const freq = currentChord[noteIndex];
+
+    playTone(freq, 0.48, "sine", 0.08, 0);
+
+    noteIndex++;
+    if (noteIndex >= currentChord.length) {
+      noteIndex = 0;
+      bgMusicStep = (bgMusicStep + 1) % arpeggios.length;
+    }
+  }, 420);
+}
+
+function stopRomanticMelody() {
+  if (bgMusicInterval) {
+    clearInterval(bgMusicInterval);
+    bgMusicInterval = null;
+  }
+  isMusicPlaying = false;
+  updateMusicToggleUI();
+}
+
+function toggleRomanticMelody() {
+  getAudioContext();
+  if (isMusicPlaying) {
+    stopRomanticMelody();
+    isAudioMuted = true;
+  } else {
+    isAudioMuted = false;
+    startRomanticMelody();
+  }
+  updateMusicToggleUI();
+}
+
+function updateMusicToggleUI() {
+  const btn = document.getElementById("musicToggleBtn");
+  if (!btn) return;
+  if (!isMusicPlaying || isAudioMuted) {
+    btn.classList.add("muted");
+    btn.setAttribute("title", "Play music");
+    btn.setAttribute("aria-label", "Play music");
+  } else {
+    btn.classList.remove("muted");
+    btn.setAttribute("title", "Pause music");
+    btn.setAttribute("aria-label", "Pause music");
+  }
+}
+
 /* ---------------- Image compression (robust across iOS & desktop) ---------------- */
 async function resizeImage(file, maxWidth = 640, quality = 0.65) {
   return new Promise((resolve, reject) => {
@@ -113,18 +267,24 @@ function checkUserHourlyRateLimit(userId) {
 
 /* ---------------- Boot: figure out which screen to show ---------------- */
 document.addEventListener("DOMContentLoaded", async () => {
-  if (window.__firebasePromise) {
-    try {
-      await window.__firebasePromise;
-    } catch (e) {
-      console.warn("Firebase promise wait error:", e);
-    }
-  }
-
-  const id = new URLSearchParams(window.location.search).get("id");
+  const urlParams = new URLSearchParams(window.location.search);
+  const id = urlParams.get("id");
+  const creatorScreen = document.getElementById("creatorScreen");
+  const receiverLoading = document.getElementById("receiverLoading");
 
   if (id) {
-    document.getElementById("creatorScreen").classList.add("hidden");
+    // Instantly hide creator screen and show soft romantic loading animation
+    if (creatorScreen) creatorScreen.classList.add("hidden");
+    if (receiverLoading) receiverLoading.classList.remove("hidden");
+
+    if (window.__firebasePromise) {
+      try {
+        await window.__firebasePromise;
+      } catch (e) {
+        console.warn("Firebase promise wait error:", e);
+      }
+    }
+
     try {
       let loaded = false;
       if (window.__fs && window.__db) {
@@ -181,10 +341,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         throw new Error("No surprise found or this link has expired.");
       }
 
+      // Smoothly dismiss receiver loading state
+      if (receiverLoading) {
+        receiverLoading.classList.add("fade-out");
+        setTimeout(() => receiverLoading.classList.add("hidden"), 380);
+      }
+
       document.getElementById("gateScreen").classList.remove("hidden");
       setupGate();
     } catch (error) {
       console.error("Link Data Error", error);
+      if (receiverLoading) receiverLoading.classList.add("hidden");
       document.body.innerHTML = `
         <div style="display:flex;flex-direction:column;min-height:100vh;justify-content:center;align-items:center;text-align:center;font-family:sans-serif;padding:24px;background:#fff5f7;">
           <div style="font-size:42px;margin-bottom:12px;">⏳</div>
@@ -197,6 +364,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       `;
     }
   } else {
+    if (receiverLoading) receiverLoading.classList.add("hidden");
     setupCreator();
   }
 });
@@ -406,8 +574,10 @@ function setupGate() {
   const gateScreen = document.getElementById("gateScreen");
 
   const verifyPasscode = () => {
+    getAudioContext();
     if (passInput.value.trim() === CONFIG.password) {
       gateError.classList.add("hidden");
+      playEnvelopeChime();
       burstHearts(16);
       gateCard.classList.add("leaving");
       setTimeout(() => {
@@ -416,6 +586,7 @@ function setupGate() {
         startCelebration();
       }, 380);
     } else {
+      playTone(220, 0.22, "sine", 0.2);
       gateError.classList.remove("hidden");
       gateCard.classList.add("shake");
       setTimeout(() => gateCard.classList.remove("shake"), 350);
@@ -433,22 +604,109 @@ function startCelebration() {
   document.title = CONFIG.title || "A Surprise For You";
   document.getElementById("celebrationTitle").innerText = CONFIG.title;
 
-  const msgCard = document.getElementById("messageCard");
+  const envelopeSection = document.getElementById("envelopeSection");
+  const envelopeTeaser = document.getElementById("envelopeTeaser");
+  const letterModal = document.getElementById("letterModal");
+  const openEnvelopeBtn = document.getElementById("openEnvelopeBtn");
+  const closeLetterBtn = document.getElementById("closeLetterBtn");
+  const playGameFromLetterBtn = document.getElementById("playGameFromLetterBtn");
+  const gameSection = document.getElementById("gameSection");
+
   if (CONFIG.message && CONFIG.message.trim()) {
     document.getElementById("displayMessage").innerText = CONFIG.message;
-    msgCard.classList.remove("hidden");
+    envelopeSection.classList.remove("hidden");
+    // Initial state: envelope closed
+    envelopeTeaser.classList.remove("hidden");
+    letterModal.classList.add("hidden");
+    letterModal.classList.remove("folding");
+
+    // Open Envelope handler
+    openEnvelopeBtn.onclick = () => {
+      getAudioContext();
+      playEnvelopeChime();
+      burstHearts(8);
+      envelopeTeaser.classList.add("hidden");
+      letterModal.classList.remove("hidden");
+      letterModal.classList.remove("folding");
+    };
+
+    // Close button on top-right: fold back into envelope
+    closeLetterBtn.onclick = () => {
+      playTone(440, 0.25, "sine", 0.12);
+      letterModal.classList.add("folding");
+      setTimeout(() => {
+        letterModal.classList.add("hidden");
+        letterModal.classList.remove("folding");
+        envelopeTeaser.classList.remove("hidden");
+      }, 320);
+    };
+
+    // Cute "Click for more" button: unfold/advance to the game area with sweet animation
+    playGameFromLetterBtn.onclick = () => {
+      getAudioContext();
+      playEnvelopeChime();
+      burstHearts(12);
+      // Fold back into envelope
+      letterModal.classList.add("folding");
+      setTimeout(() => {
+        letterModal.classList.add("hidden");
+        letterModal.classList.remove("folding");
+        envelopeTeaser.classList.remove("hidden");
+      }, 320);
+
+      // Smoothly scroll down to the game panel and highlight it
+      setTimeout(() => {
+        if (gameSection) {
+          gameSection.scrollIntoView({ behavior: "smooth", block: "center" });
+          gameSection.classList.add("focus-highlight");
+          setTimeout(() => gameSection.classList.remove("focus-highlight"), 1400);
+        }
+      }, 350);
+    };
   } else {
-    msgCard.classList.add("hidden");
+    envelopeSection.classList.add("hidden");
   }
 
   const celebScreen = document.getElementById("celebrationScreen");
   celebScreen.classList.remove("hidden");
   requestAnimationFrame(() => celebScreen.classList.add("revealing"));
 
-  if (CONFIG.photos && CONFIG.photos.length >= 3) {
-    document.getElementById("slide1").src = CONFIG.photos[0];
-    document.getElementById("slide2").src = CONFIG.photos[1];
-    document.getElementById("slide3").src = CONFIG.photos[2];
+  // Dynamically setup slides based on actual photo count
+  const sliderEl = document.querySelector(".hero .slider");
+  const dotsContainer = document.getElementById("sliderDots");
+  const photos = Array.isArray(CONFIG.photos) ? CONFIG.photos : [];
+  const photoCount = Math.max(photos.length, 1);
+
+  // Clear existing slides and dots
+  const existingSlides = sliderEl.querySelectorAll(".slide");
+  existingSlides.forEach(s => s.remove());
+  dotsContainer.innerHTML = "";
+
+  photos.forEach((src, idx) => {
+    const img = document.createElement("img");
+    img.id = `slide${idx + 1}`;
+    img.alt = `Memory photo ${idx + 1}`;
+    img.className = idx === 0 ? "slide active" : "slide";
+    img.src = src;
+    // Insert before hero-fade
+    const heroFade = sliderEl.querySelector(".hero-fade");
+    sliderEl.insertBefore(img, heroFade);
+
+    if (photoCount > 1) {
+      const dot = document.createElement("span");
+      dot.className = idx === 0 ? "dot active" : "dot";
+      dot.setAttribute("data-index", String(idx));
+      dot.setAttribute("role", "button");
+      dot.setAttribute("aria-label", `Show photo ${idx + 1}`);
+      dot.setAttribute("tabindex", "0");
+      dotsContainer.appendChild(dot);
+    }
+  });
+
+  if (photoCount <= 1) {
+    dotsContainer.style.display = "none";
+  } else {
+    dotsContainer.style.display = "flex";
   }
 
   // Setup "Create Another" flow button
@@ -457,6 +715,22 @@ function startCelebration() {
     createAnotherBtn.onclick = () => {
       window.location.href = window.location.pathname;
     };
+  }
+
+  // Setup Romantic Music Toggle button
+  const musicToggleBtn = document.getElementById("musicToggleBtn");
+  if (musicToggleBtn) {
+    musicToggleBtn.onclick = (e) => {
+      e.stopPropagation();
+      toggleRomanticMelody();
+    };
+  }
+
+  // Initialize romantic background music (starts smoothly with user's unlock gesture)
+  if (!isAudioMuted) {
+    startRomanticMelody();
+  } else {
+    updateMusicToggleUI();
   }
 
   initSlider();
@@ -469,19 +743,23 @@ function startCelebration() {
 function initSlider() {
   const slides = Array.from(document.querySelectorAll(".slide"));
   const dots = Array.from(document.querySelectorAll(".slider-dots .dot"));
+  if (slides.length === 0) return;
   let currentSlide = 0;
 
   function show(idx) {
+    if (slides.length <= 1) return;
     slides[currentSlide] && slides[currentSlide].classList.remove("active");
     dots[currentSlide] && dots[currentSlide].classList.remove("active");
-    currentSlide = idx;
+    currentSlide = (idx + slides.length) % slides.length;
     slides[currentSlide] && slides[currentSlide].classList.add("active");
     dots[currentSlide] && dots[currentSlide].classList.add("active");
   }
 
   function resetTimer() {
     if (sliderInterval) clearInterval(sliderInterval);
-    sliderInterval = setInterval(() => show((currentSlide + 1) % slides.length), 3500);
+    if (slides.length > 1) {
+      sliderInterval = setInterval(() => show(currentSlide + 1), 3800);
+    }
   }
 
   dots.forEach((dot, i) => {
@@ -490,6 +768,35 @@ function initSlider() {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); show(i); resetTimer(); }
     });
   });
+
+  // Mobile swipe gesture support on slider
+  const sliderEl = document.querySelector(".hero .slider");
+  if (sliderEl && slides.length > 1) {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    sliderEl.addEventListener("touchstart", (e) => {
+      if (e.touches && e.touches[0]) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+
+    sliderEl.addEventListener("touchend", (e) => {
+      if (e.changedTouches && e.changedTouches[0]) {
+        const deltaX = e.changedTouches[0].clientX - touchStartX;
+        const deltaY = e.changedTouches[0].clientY - touchStartY;
+        // Check if horizontal swipe was dominant
+        if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+          if (deltaX < 0) {
+            show(currentSlide + 1); // Swipe left -> next
+          } else {
+            show(currentSlide - 1); // Swipe right -> prev
+          }
+          resetTimer();
+        }
+      }
+    }, { passive: true });
+  }
 
   resetTimer();
 }
@@ -543,6 +850,16 @@ function initGame() {
     }
   }, 1800);
 
+  function triggerHaptic(pattern = [40]) {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      try {
+        navigator.vibrate(pattern);
+      } catch (err) {
+        // Silently ignore if vibrations are blocked by device policy
+      }
+    }
+  }
+
   function hit(e) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
     score++;
@@ -550,6 +867,12 @@ function initGame() {
     showScorePop(parseFloat(target.style.left) || 0, parseFloat(target.style.top) || 0, gameArea);
 
     if (score >= targetScore) {
+      // Play celebratory chime fanfare
+      playCelebrationFanfare();
+
+      // Satisfying celebratory vibration pattern on winning (e.g. 50ms pulse, 60ms pause, 100ms pulse)
+      triggerHaptic([50, 60, 100]);
+
       if (targetDriftTimer) {
         clearInterval(targetDriftTimer);
         targetDriftTimer = null;
@@ -577,6 +900,11 @@ function initGame() {
       burstHearts(12);
       winOverlay.classList.remove("hidden");
     } else {
+      // Play sweet rising musical bell for each caught heart
+      playHeartCatchSound(score);
+
+      // Crisp, tactile single haptic tap on each caught heart
+      triggerHaptic(40);
       moveTarget();
     }
   }
