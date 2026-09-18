@@ -190,9 +190,36 @@
           </div>
         </div>
 
+        <!-- Dedicated Revive & Extend Link Section -->
+        <div class="status-revive-section">
+          <div class="revive-header">
+            <div class="revive-title-col">
+              <span class="revive-title">⚡ Extend / Revive Link</span>
+              <span class="revive-subtitle">Reactivate expired links or extend current validity</span>
+            </div>
+          </div>
+
+          <div class="revive-button-grid">
+            <button type="button" id="revive12hBtn" class="btn-revive-pill primary" title="Reactivate this exact link for another 12 hours and reset clicks">
+              <span class="btn-revive-icon">⏳</span> +12h (Revive)
+            </button>
+            <button type="button" id="revive24hBtn" class="btn-revive-pill" title="Extend link validity by 24 hours">
+              +24 Hours
+            </button>
+            <button type="button" id="revive7dBtn" class="btn-revive-pill" title="Extend link validity by 7 days">
+              +7 Days
+            </button>
+            <button type="button" id="resetClicksBtn" class="btn-revive-pill" title="Reset views counter to 0">
+              🔄 Reset Clicks
+            </button>
+          </div>
+
+          <p id="reviveSuccessNotice" class="success-line hidden">Link successfully extended! ✨</p>
+        </div>
+
         <!-- Inline Editor Form for Content -->
         <div class="status-edit-section">
-          <button type="button" id="toggleEditBtn" class="btn-secondary btn-full">✏️ Edit Details</button>
+          <button type="button" id="toggleEditBtn" class="btn-secondary btn-full">✏️ Edit Details & Duration</button>
           
           <div id="editFieldsContainer" class="edit-fields-container hidden">
             <div class="field">
@@ -211,6 +238,32 @@
               <label for="editPasswordInput">Secret Passcode</label>
               <input type="password" id="editPasswordInput">
             </div>
+
+            <!-- Extend duration in Editor -->
+            <div class="field">
+              <label for="editExtendDuration">Extend Validity Time</label>
+              <select id="editExtendDuration" class="select-full">
+                <option value="keep">Keep Current Expiry</option>
+                <option value="12h">+12 Hours (from now)</option>
+                <option value="24h">+24 Hours (from now)</option>
+                <option value="3d">+3 Days (from now)</option>
+                <option value="7d">+7 Days (from now)</option>
+                <option value="30d">+30 Days (from now)</option>
+              </select>
+            </div>
+
+            <div class="field-checkbox-row">
+              <label class="checkbox-label" for="editResetClicksCheck">
+                <input type="checkbox" id="editResetClicksCheck" checked>
+                <span>Reset view counter to 0 (allow fresh views)</span>
+              </label>
+            </div>
+
+            <div class="field">
+              <label for="editMaxClicksInput">Max Allowed Views</label>
+              <input type="number" id="editMaxClicksInput" min="5" max="100" placeholder="10">
+            </div>
+
             <div class="edit-actions">
               <button type="button" id="saveEditBtn" class="btn-primary">Save Changes</button>
               <button type="button" id="cancelEditBtn" class="btn-ghost">Cancel</button>
@@ -301,6 +354,10 @@
             </div>
           </div>
           <div class="voice-player-controls">
+            <button type="button" id="playPauseVoiceBtn" class="btn-voice-ctrl" title="Play/Pause voice note" aria-label="Play or pause voice note">
+              <span id="playPauseVoiceIcon" class="ctrl-icon">⏸</span>
+              <span id="playPauseVoiceLabel" class="ctrl-label">Pause</span>
+            </button>
             <button type="button" id="replayVoiceBtn" class="btn-voice-ctrl" title="Replay voice note" aria-label="Replay voice note">
               <span class="ctrl-icon">🔄</span>
               <span class="ctrl-label">Replay</span>

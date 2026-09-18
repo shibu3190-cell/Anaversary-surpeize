@@ -214,6 +214,9 @@ function updateMusicToggleUI() {
 /* ---------------- Voice Note Playback & Ducking Engine ---------------- */
 function initVoicePlayerForLetter() {
   const player = document.getElementById("letterVoicePlayer");
+  const playPauseBtn = document.getElementById("playPauseVoiceBtn");
+  const playPauseIcon = document.getElementById("playPauseVoiceIcon");
+  const playPauseLabel = document.getElementById("playPauseVoiceLabel");
   const replayBtn = document.getElementById("replayVoiceBtn");
   const muteBtn = document.getElementById("muteVoiceBtn");
   const muteIcon = document.getElementById("muteVoiceIcon");
@@ -262,6 +265,8 @@ function initVoicePlayerForLetter() {
   activeVoiceAudio.addEventListener("play", () => {
     isVoicePlaying = true;
     if (player) player.classList.add("playing");
+    if (playPauseIcon) playPauseIcon.textContent = "⏸";
+    if (playPauseLabel) playPauseLabel.textContent = "Pause";
     // Duck the background music so the voice is clearly heard
     duckBackgroundMusic(true);
   });
@@ -269,6 +274,8 @@ function initVoicePlayerForLetter() {
   activeVoiceAudio.addEventListener("pause", () => {
     isVoicePlaying = false;
     if (player) player.classList.remove("playing");
+    if (playPauseIcon) playPauseIcon.textContent = "▶";
+    if (playPauseLabel) playPauseLabel.textContent = "Play";
     // Restore background music
     duckBackgroundMusic(false);
   });
@@ -276,11 +283,26 @@ function initVoicePlayerForLetter() {
   activeVoiceAudio.addEventListener("ended", () => {
     isVoicePlaying = false;
     if (player) player.classList.remove("playing");
+    if (playPauseIcon) playPauseIcon.textContent = "▶";
+    if (playPauseLabel) playPauseLabel.textContent = "Play";
     duckBackgroundMusic(false);
     if (progressLabel) {
       progressLabel.textContent = `Ended / ${formatSecs(activeVoiceAudio.duration)}`;
     }
   });
+
+  // Play / Pause toggle button
+  if (playPauseBtn) {
+    playPauseBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (!activeVoiceAudio) return;
+      if (activeVoiceAudio.paused) {
+        activeVoiceAudio.play().catch(err => console.warn("Audio play blocked:", err));
+      } else {
+        activeVoiceAudio.pause();
+      }
+    };
+  }
 
   // Replay button
   if (replayBtn) {
@@ -499,12 +521,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (receiverLoading) receiverLoading.classList.add("hidden");
       document.body.innerHTML = `
         <div style="display:flex;flex-direction:column;min-height:100vh;justify-content:center;align-items:center;text-align:center;font-family:sans-serif;padding:24px;background:#fff5f7;">
-          <div style="font-size:42px;margin-bottom:12px;">⏳</div>
-          <h2 style="color:#7a2142;margin:0 0 10px;font-family:Playfair Display, serif;">Link No Longer Available</h2>
-          <p style="color:#664052;max-width:320px;line-height:1.5;margin-bottom:20px;">
-            ${error.message || "This link seems broken or reached its 12-hour / 10-clicks privacy limit."}
+          <div style="font-size:46px;margin-bottom:12px;">⏳</div>
+          <h2 style="color:#7a2142;margin:0 0 10px;font-family:Playfair Display, serif;font-size:1.6rem;">Link Expired or Limit Reached</h2>
+          <p style="color:#664052;max-width:340px;line-height:1.5;margin-bottom:22px;font-size:0.95rem;">
+            ${error.message || "This link reached its 12-hour or view limit."}
           </p>
-          <a href="${window.location.pathname}" style="display:inline-block;padding:12px 24px;border-radius:999px;background:#7a2142;color:#fff;text-decoration:none;font-weight:700;font-size:14px;">Create a New Surprise</a>
+          <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:300px;">
+            <a href="${window.location.pathname}?manage=${encodeURIComponent(id)}" style="display:block;padding:12px 20px;border-radius:999px;background:linear-gradient(135deg,#c9557a,#7a2142);color:#fff;text-decoration:none;font-weight:700;font-size:14px;box-shadow:0 4px 14px rgba(122,33,66,0.25);">
+              ⚡ Revive This Link (Creator)
+            </a>
+            <a href="${window.location.pathname}" style="display:block;padding:10px 20px;border-radius:999px;background:rgba(201,85,122,0.12);color:#7a2142;text-decoration:none;font-weight:600;font-size:13px;">
+              Create a New Surprise
+            </a>
+          </div>
         </div>
       `;
     }
@@ -1055,6 +1084,11 @@ function setupCreatorManagement() {
       document.getElementById("editMessageInput").value = data.message || "";
       document.getElementById("editCustomGreetingInput").value = data.customGreeting || "";
       document.getElementById("editPasswordInput").value = data.password || "";
+      if (document.getElementById("editExtendDuration")) document.getElementById("editExtendDuration").value = "keep";
+      if (document.getElementById("editResetClicksCheck")) document.getElementById("editResetClicksCheck").checked = true;
+      if (document.getElementById("editMaxClicksInput")) document.getElementById("editMaxClicksInput").value = data.maxClicks || 10;
+      const reviveNotice = document.getElementById("reviveSuccessNotice");
+      if (reviveNotice) reviveNotice.classList.add("hidden");
 
       statusCard.classList.remove("hidden");
     } catch (err) {
@@ -1072,6 +1106,102 @@ function setupCreatorManagement() {
     if (e.key === "Enter") checkStatus();
   });
 
+  // Dedicated Link Revival & Extension Handler
+  async function applyExtension(hoursToAdd, resetClicks = true, newMaxClicks = null) {
+    if (!currentManagedId || !currentManagedData) return;
+    const notice = document.getElementById("reviveSuccessNotice");
+    if (notice) notice.classList.add("hidden");
+
+    const now = Date.now();
+    let baseTime = now;
+    if (hoursToAdd > 0 && currentManagedData.expiresAt && currentManagedData.expiresAt > now) {
+      baseTime = currentManagedData.expiresAt;
+    }
+    const newExpiresAt = hoursToAdd > 0 ? (baseTime + (hoursToAdd * 3600 * 1000)) : (currentManagedData.expiresAt || (now + 12 * 3600 * 1000));
+
+    const updates = {};
+    if (hoursToAdd > 0 || (currentManagedData.expiresAt && currentManagedData.expiresAt <= now)) {
+      updates.expiresAt = newExpiresAt;
+    }
+    if (resetClicks) {
+      updates.clickCount = 0;
+    }
+    if (typeof newMaxClicks === "number" && !isNaN(newMaxClicks) && newMaxClicks > 0) {
+      updates.maxClicks = newMaxClicks;
+    }
+
+    try {
+      // 1. Update Firestore if accessible
+      if (window.__fs && window.__db) {
+        try {
+          const { doc, updateDoc } = window.__fs;
+          await updateDoc(doc(window.__db, "surprises", currentManagedId), updates);
+        } catch (fsErr) {
+          console.warn("Firestore extension error:", fsErr);
+        }
+      }
+
+      // 2. Update Server Memory
+      try {
+        await fetch(`/api/surprises/${encodeURIComponent(currentManagedId)}/revive`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            hours: Math.round((newExpiresAt - now) / 3600000),
+            maxClicks: updates.maxClicks || currentManagedData.maxClicks,
+            surpriseData: { ...currentManagedData, ...updates }
+          })
+        });
+      } catch (apiErr) {
+        console.warn("Server revive error:", apiErr);
+      }
+
+      // 3. Update local state
+      if (updates.expiresAt) currentManagedData.expiresAt = updates.expiresAt;
+      if (resetClicks) currentManagedData.clickCount = 0;
+      if (updates.maxClicks) currentManagedData.maxClicks = updates.maxClicks;
+      currentManagedData.isExpired = false;
+
+      // 4. Update UI Card
+      const badge = document.getElementById("statusBadge");
+      badge.className = "badge-active";
+      badge.textContent = "Active & Live ✨";
+
+      const maxClicksVal = currentManagedData.maxClicks || 10;
+      document.getElementById("statusClickCount").textContent = `${currentManagedData.clickCount || 0} / ${maxClicksVal}`;
+
+      const remainingMs = Math.max(0, (currentManagedData.expiresAt || 0) - Date.now());
+      const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
+      const remainingMins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+      document.getElementById("statusTimeRemaining").textContent = remainingMs > 0 ? `${remainingHours}h ${remainingMins}m` : "Expired";
+
+      const expiresDate = new Date(currentManagedData.expiresAt);
+      document.getElementById("statusExpiresAt").textContent = expiresDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ", " + expiresDate.toLocaleDateString();
+
+      if (notice) {
+        const msg = hoursToAdd > 0 
+          ? `Link revived & extended by +${hoursToAdd}h! Remaining: ${remainingHours}h ${remainingMins}m. ✨`
+          : `Click views counter reset to 0! ✨`;
+        notice.textContent = msg;
+        notice.classList.remove("hidden");
+      }
+    } catch (err) {
+      alert("Could not extend link: " + err.message);
+    }
+  }
+
+  const revive12hBtn = document.getElementById("revive12hBtn");
+  if (revive12hBtn) revive12hBtn.addEventListener("click", () => applyExtension(12, true));
+
+  const revive24hBtn = document.getElementById("revive24hBtn");
+  if (revive24hBtn) revive24hBtn.addEventListener("click", () => applyExtension(24, true));
+
+  const revive7dBtn = document.getElementById("revive7dBtn");
+  if (revive7dBtn) revive7dBtn.addEventListener("click", () => applyExtension(7 * 24, true));
+
+  const resetClicksBtn = document.getElementById("resetClicksBtn");
+  if (resetClicksBtn) resetClicksBtn.addEventListener("click", () => applyExtension(0, true));
+
   // Toggle Edit details section
   const toggleEditBtn = document.getElementById("toggleEditBtn");
   const editContainer = document.getElementById("editFieldsContainer");
@@ -1087,13 +1217,13 @@ function setupCreatorManagement() {
       if (editNotice) editNotice.classList.add("hidden");
     } else {
       editContainer.classList.add("hidden");
-      toggleEditBtn.textContent = "✏️ Edit Details";
+      toggleEditBtn.textContent = "✏️ Edit Details & Duration";
     }
   });
 
   cancelEditBtn.addEventListener("click", () => {
     editContainer.classList.add("hidden");
-    toggleEditBtn.textContent = "✏️ Edit Details";
+    toggleEditBtn.textContent = "✏️ Edit Details & Duration";
   });
 
   saveEditBtn.addEventListener("click", async () => {
@@ -1102,12 +1232,39 @@ function setupCreatorManagement() {
     saveEditBtn.textContent = "Saving...";
     if (editNotice) editNotice.classList.add("hidden");
 
+    const extendDurationVal = document.getElementById("editExtendDuration") ? document.getElementById("editExtendDuration").value : "keep";
+    const resetClicksCheck = document.getElementById("editResetClicksCheck") ? document.getElementById("editResetClicksCheck").checked : false;
+    const maxClicksInput = document.getElementById("editMaxClicksInput") ? parseInt(document.getElementById("editMaxClicksInput").value, 10) : NaN;
+
     const updated = {
       title: document.getElementById("editTitleInput").value.trim(),
       message: document.getElementById("editMessageInput").value.trim(),
       customGreeting: document.getElementById("editCustomGreetingInput").value.trim(),
       password: document.getElementById("editPasswordInput").value.trim()
     };
+
+    if (extendDurationVal !== "keep") {
+      let hours = 12;
+      if (extendDurationVal === "24h") hours = 24;
+      else if (extendDurationVal === "3d") hours = 72;
+      else if (extendDurationVal === "7d") hours = 168;
+      else if (extendDurationVal === "30d") hours = 720;
+      
+      const now = Date.now();
+      let base = now;
+      if (currentManagedData && currentManagedData.expiresAt && currentManagedData.expiresAt > now) {
+        base = currentManagedData.expiresAt;
+      }
+      updated.expiresAt = base + (hours * 3600 * 1000);
+    }
+
+    if (resetClicksCheck) {
+      updated.clickCount = 0;
+    }
+
+    if (!isNaN(maxClicksInput) && maxClicksInput > 0) {
+      updated.maxClicks = maxClicksInput;
+    }
 
     try {
       // 1. Update Firestore if accessible
@@ -1127,13 +1284,34 @@ function setupCreatorManagement() {
         body: JSON.stringify(updated)
       });
 
-      if (editNotice) {
-        editNotice.classList.remove("hidden");
-        editNotice.textContent = "Changes saved successfully! ✨";
+      // 3. Update local state & UI
+      if (currentManagedData) {
+        Object.assign(currentManagedData, updated);
+        currentManagedData.isExpired = false;
+
+        document.getElementById("statusTitle").textContent = updated.title || "Surprise Moment";
+        const badge = document.getElementById("statusBadge");
+        badge.className = "badge-active";
+        badge.textContent = "Active & Live ✨";
+
+        const maxClicksVal = currentManagedData.maxClicks || 10;
+        document.getElementById("statusClickCount").textContent = `${currentManagedData.clickCount || 0} / ${maxClicksVal}`;
+
+        if (currentManagedData.expiresAt) {
+          const remainingMs = Math.max(0, currentManagedData.expiresAt - Date.now());
+          const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
+          const remainingMins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+          document.getElementById("statusTimeRemaining").textContent = `${remainingHours}h ${remainingMins}m`;
+
+          const expiresDate = new Date(currentManagedData.expiresAt);
+          document.getElementById("statusExpiresAt").textContent = expiresDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ", " + expiresDate.toLocaleDateString();
+        }
       }
 
-      // Update card title
-      document.getElementById("statusTitle").textContent = updated.title || "Surprise Moment";
+      if (editNotice) {
+        editNotice.classList.remove("hidden");
+        editNotice.textContent = "Changes saved and link extended successfully! ✨";
+      }
     } catch (err) {
       alert("Could not update surprise: " + err.message);
     } finally {
@@ -1141,6 +1319,15 @@ function setupCreatorManagement() {
       saveEditBtn.textContent = "Save Changes";
     }
   });
+
+  // Auto-switch to manage tab if URL parameter ?manage=ID is provided
+  const urlParams = new URLSearchParams(window.location.search);
+  const manageId = urlParams.get("manage");
+  if (manageId) {
+    tabManage.click();
+    lookupInput.value = manageId;
+    setTimeout(() => checkStatus(), 120);
+  }
 }
 
 /* ---------------- Screen 2: Passcode gate ---------------- */

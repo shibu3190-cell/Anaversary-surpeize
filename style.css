@@ -1256,6 +1256,121 @@ input[type=file] { width: 100%; font-size: .88rem; font-family: var(--sans); }
   font-weight: 600;
 }
 
+/* Revive & Extension Controls */
+.status-revive-section {
+  background: linear-gradient(135deg, rgba(254, 240, 244, 0.9), rgba(255, 248, 250, 0.95));
+  border: 1px solid rgba(201, 85, 122, 0.25);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.revive-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.revive-title-col {
+  display: flex;
+  flex-direction: column;
+}
+.revive-title {
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 0.92rem;
+  color: var(--wine);
+}
+.revive-subtitle {
+  font-size: 0.76rem;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.revive-button-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+@media (min-width: 480px) {
+  .revive-button-grid {
+    grid-template-columns: 1.3fr 1fr 1fr 1.1fr;
+  }
+}
+
+.btn-revive-pill {
+  background: #fff;
+  color: var(--wine);
+  border: 1px solid rgba(201, 85, 122, 0.3);
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+  margin: 0;
+}
+.btn-revive-pill:hover {
+  background: rgba(201, 85, 122, 0.1);
+  border-color: var(--rose);
+  transform: translateY(-1px);
+}
+.btn-revive-pill:active {
+  transform: scale(0.97);
+}
+.btn-revive-pill.primary {
+  background: linear-gradient(135deg, var(--rose), var(--wine));
+  color: #fff;
+  border: none;
+  box-shadow: 0 2px 8px rgba(122, 33, 66, 0.2);
+}
+.btn-revive-pill.primary:hover {
+  box-shadow: 0 4px 12px rgba(122, 33, 66, 0.3);
+  filter: brightness(1.05);
+}
+.btn-revive-icon {
+  font-size: 0.95rem;
+}
+
+.field-checkbox-row {
+  margin: 8px 0 12px;
+}
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #4a2434;
+  cursor: pointer;
+}
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--wine);
+  cursor: pointer;
+  margin: 0;
+}
+.select-full {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(201, 85, 122, 0.3);
+  background: #fff;
+  font-family: var(--sans);
+  font-size: 0.9rem;
+  color: #4a2434;
+  outline: none;
+}
+.select-full:focus {
+  border-color: var(--wine);
+  box-shadow: 0 0 0 3px rgba(201, 85, 122, 0.15);
+}
+
 .status-edit-section {
   margin-bottom: 12px;
 }

@@ -90,16 +90,14 @@ app.get('/api/surprises/:id', (req, res) => {
 
   const now = Date.now();
   if (data.expiresAt && now > data.expiresAt) {
-    memorySurprises.delete(req.params.id);
-    return res.status(410).json({ error: 'This surprise link has expired (12 hours limit reached).' });
+    return res.status(410).json({ error: 'This surprise link has expired (12 hours limit reached). You can revive it in the Manage tab.' });
   }
 
   // Increment click count
   data.clickCount = (data.clickCount || 0) + 1;
   const maxClicks = typeof data.maxClicks === 'number' ? data.maxClicks : 10;
   if (data.clickCount > maxClicks) {
-    memorySurprises.delete(req.params.id);
-    return res.status(410).json({ error: 'This surprise link has reached its maximum view limit (10 clicks) and was cleared.' });
+    return res.status(410).json({ error: 'This surprise link has reached its maximum view limit (10 clicks). You can reset clicks in the Manage tab.' });
   }
 
   res.json(data);
@@ -112,7 +110,7 @@ app.get('/api/surprises/:id/status', (req, res) => {
     return res.status(404).json({ error: 'Surprise not found or has expired' });
   }
   const now = Date.now();
-  const isExpired = !!(data.expiresAt && now > data.expiresAt);
+  const isExpired = !!((data.expiresAt && now > data.expiresAt) || (data.clickCount >= (data.maxClicks || 10)));
   res.json({
     id: data.id,
     title: data.title,
@@ -128,22 +126,57 @@ app.get('/api/surprises/:id/status', (req, res) => {
   });
 });
 
-// Update surprise content (for creators)
+// Update surprise content or extend/revive validity (for creators)
 app.put('/api/surprises/:id', (req, res) => {
-  const existing = memorySurprises.get(req.params.id);
-  if (!existing) {
-    return res.status(404).json({ error: 'Surprise not found or has expired' });
+  let existing = memorySurprises.get(req.params.id);
+  if (!existing && req.body && req.body.title) {
+    // If not in memory but client has full data, reconstruct entry
+    existing = { id: req.params.id, ...req.body };
+  } else if (!existing) {
+    return res.status(404).json({ error: 'Surprise not found' });
   }
 
-  const { title, message, customGreeting, password, voiceNote } = req.body;
+  const { title, message, customGreeting, password, voiceNote, expiresAt, clickCount, maxClicks } = req.body;
   if (title) existing.title = title;
   if (typeof message === 'string') existing.message = message;
   if (typeof customGreeting === 'string') existing.customGreeting = customGreeting;
   if (password) existing.password = password;
   if (voiceNote !== undefined) existing.voiceNote = voiceNote;
+  if (typeof expiresAt === 'number') existing.expiresAt = expiresAt;
+  if (typeof clickCount === 'number') existing.clickCount = clickCount;
+  if (typeof maxClicks === 'number') existing.maxClicks = maxClicks;
 
   memorySurprises.set(req.params.id, existing);
   res.json({ success: true, surprise: existing });
+});
+
+// Dedicated revive & extend endpoint
+app.post('/api/surprises/:id/revive', (req, res) => {
+  let existing = memorySurprises.get(req.params.id);
+  const { hours = 12, maxClicks, surpriseData } = req.body;
+  
+  if (!existing && surpriseData) {
+    existing = { id: req.params.id, ...surpriseData };
+  } else if (!existing) {
+    return res.status(404).json({ error: 'Surprise not found' });
+  }
+
+  const now = Date.now();
+  // Extend by specified hours from now (default 12 hours)
+  existing.expiresAt = now + (Number(hours) * 3600 * 1000);
+  existing.clickCount = 0; // Reset view counter
+  if (typeof maxClicks === 'number') {
+    existing.maxClicks = maxClicks;
+  }
+
+  memorySurprises.set(req.params.id, existing);
+  res.json({
+    success: true,
+    message: `Link extended for another ${hours} hours!`,
+    expiresAt: existing.expiresAt,
+    clickCount: existing.clickCount,
+    maxClicks: existing.maxClicks || 10
+  });
 });
 
 // Static assets
